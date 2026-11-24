@@ -107,7 +107,7 @@ async function seedDemoCampaign() {
       email.scheduled_at
     );
 
-    await indexEmailDocument(email).catch(() => {});
+    indexEmailDocument(email).catch(() => {});
   }
 
   console.log('\n🎉 Demonstration seed complete!');
