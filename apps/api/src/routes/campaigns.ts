@@ -62,8 +62,8 @@ campaignsRouter.post(
       start_time,
       delay_seconds,
       hourly_limit,
-      recipients: jsonRecipients,
     } = req.body;
+    const jsonRecipients = req.body.recipients || req.body.csv_data || req.body.csv;
 
     if (!subject || !body) {
       return res.status(400).json({

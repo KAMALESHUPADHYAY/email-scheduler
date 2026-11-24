@@ -112,7 +112,7 @@ authRouter.get('/google/callback', async (req: Request, res: Response) => {
       },
     });
 
-    await ensureUserSender(user.id, user.email);
+    const sender = await ensureUserSender(user.id, user.email);
 
     const sessionToken = jwt.sign(
       { userId: user.id, email: user.email },
@@ -154,7 +154,7 @@ authRouter.get('/dev-login', async (req: Request, res: Response) => {
     },
   });
 
-  await ensureUserSender(user.id, user.email);
+  const sender = await ensureUserSender(user.id, user.email);
 
   const sessionToken = jwt.sign(
     { userId: user.id, email: user.email },
@@ -169,6 +169,20 @@ authRouter.get('/dev-login', async (req: Request, res: Response) => {
     domain: config.COOKIE_DOMAIN || undefined,
     maxAge: 7 * 24 * 60 * 60 * 1000,
   });
+
+  if (req.query.json === 'true' || req.headers.accept?.includes('application/json')) {
+    return res.json({
+      success: true,
+      token: sessionToken,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        avatar_url: user.avatar_url,
+      },
+      sender,
+    });
+  }
 
   return res.redirect(`${config.FRONTEND_URL}/dashboard`);
 });

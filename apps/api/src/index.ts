@@ -87,6 +87,10 @@ app.get('/health', async (req, res) => {
 
 // Routes
 app.use('/auth', authLimiter, authRouter);
+app.get('/me', (req, res, next) => {
+  req.url = '/me';
+  authRouter(req, res, next);
+});
 app.use('/campaigns', campaignsRouter);
 app.use('/emails', emailsRouter);
 app.use('/search', searchRouter);
