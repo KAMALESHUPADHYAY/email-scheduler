@@ -1,3 +1,4 @@
+import http from 'http';
 import { Worker } from 'bullmq';
 import {
   EMAIL_QUEUE_NAME,
@@ -49,10 +50,22 @@ worker.on('error', (err) => {
   logger.error({ error: err }, 'Worker encountered an error');
 });
 
+// Optional HTTP health server for cloud hosting platforms (e.g. Render Web Service free tier)
+const healthPort = process.env.PORT || 10000;
+const healthServer = http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ status: 'ok', service: 'bullmq-worker' }));
+});
+
+healthServer.listen(healthPort, () => {
+  logger.info(`Worker health probe listening on port ${healthPort}`);
+});
+
 // Graceful shutdown handling
 const shutdown = async () => {
   logger.info('Shutting down BullMQ worker gracefully...');
   try {
+    healthServer.close();
     await worker.close();
     logger.info('BullMQ worker closed');
     process.exit(0);
