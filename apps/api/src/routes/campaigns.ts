@@ -134,10 +134,10 @@ campaignsRouter.post(
         ? new Date()
         : parsedStartTime;
 
-    const effectiveDelaySec = Math.max(
-      1,
-      Number(delay_seconds) || sender.hourly_limit ? Math.floor(3600 / (sender.hourly_limit || 20)) : 2
-    );
+    const delayNum = Number(delay_seconds);
+    const effectiveDelaySec = !isNaN(delayNum) && delayNum > 0
+      ? delayNum
+      : (sender.hourly_limit ? Math.floor(3600 / sender.hourly_limit) : 2);
 
     const effectiveHourlyLimit = Number(hourly_limit) || sender.hourly_limit || 20;
 
