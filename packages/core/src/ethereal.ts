@@ -41,6 +41,9 @@ export function createEtherealTransporter(credentials: {
       user: credentials.ethereal_user,
       pass: credentials.ethereal_pass,
     },
+    connectionTimeout: 3000,
+    greetingTimeout: 3000,
+    socketTimeout: 3000,
   });
 }
 

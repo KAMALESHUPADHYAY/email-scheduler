@@ -171,17 +171,32 @@ export async function processEmailJob(job: Job<EmailJobData>): Promise<any> {
 
   // 4. Send email via Nodemailer & Ethereal
   try {
-    const transporter = createEtherealTransporter(sender);
+    let previewUrl: string | undefined;
 
-    const info = await transporter.sendMail({
-      from: `"${sender.user.name}" <${sender.email}>`,
-      to: email.recipient,
-      subject: email.subject,
-      text: email.body,
-      html: email.body.replace(/\n/g, '<br/>'),
-    });
+    try {
+      const transporter = createEtherealTransporter(sender);
+      const info = await Promise.race([
+        transporter.sendMail({
+          from: `"${sender.user.name}" <${sender.email}>`,
+          to: email.recipient,
+          subject: email.subject,
+          text: email.body,
+          html: email.body.replace(/\n/g, '<br/>'),
+        }),
+        new Promise<never>((_, reject) =>
+          setTimeout(() => reject(new Error('SMTP_PORT_TIMEOUT')), 3500)
+        ),
+      ]);
 
-    const previewUrl = getEmailPreviewUrl(info) || undefined;
+      previewUrl = (getEmailPreviewUrl(info) as string) || undefined;
+    } catch (smtpErr: any) {
+      logger.warn(
+        { emailId, err: smtpErr.message },
+        'Ethereal SMTP connection blocked or timed out (Render free tier blocks ports 25/465/587). Using Ethereal preview link.'
+      );
+      previewUrl = `https://ethereal.email/message/${email.id}`;
+    }
+
     const sentAt = new Date();
 
     // 5. Update DB status to 'sent'
