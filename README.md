@@ -4,6 +4,19 @@ Production-grade, distributed "Email Scheduler" web application and background q
 
 ---
 
+## 🌐 Live Production Deployments
+
+| Component | Provider | Live URL / Endpoint | Status |
+| :--- | :--- | :--- | :--- |
+| **Frontend Dashboard** | **Vercel** | [https://web-eight-dusky-46.vercel.app](https://web-eight-dusky-46.vercel.app) | 🟢 **Live (Next.js 14)** |
+| **API Web Service** | **Render** | [https://email-scheduler-api-433g.onrender.com](https://email-scheduler-api-433g.onrender.com) | 🟢 **Live (Express + TS)** |
+| **Bull Board Dashboard** | **Render** | [https://email-scheduler-api-433g.onrender.com/admin/queues](https://email-scheduler-api-433g.onrender.com/admin/queues) | 🟢 **Live (`admin` / `admin_secure_password_123`)** |
+| **Dedicated Background Worker** | **Render** | [https://email-scheduler-worker-p9wo.onrender.com](https://email-scheduler-worker-p9wo.onrender.com) | 🟢 **Live (BullMQ Worker)** |
+| **PostgreSQL Database** | **Neon** | `ep-curly-pine-biur01pw-pooler.c-5.ap-southeast-1.aws.neon.tech` | 🟢 **Live (Migrations Deployed)** |
+| **Distributed Queue & Counters**| **Upstash Redis** | `renewing-filly-216225.upstash.io:6379` (TLS `rediss://`) | 🟢 **Live (`noeviction` for BullMQ)** |
+
+---
+
 ## 🏛️ Architecture Overview
 
 The system is engineered as an event-driven monorepo separating API ingestion, UI, and distributed background processing:
@@ -214,6 +227,21 @@ Run the automated test proving zero email loss and zero duplicate sends across w
 ```bash
 npm run test:restart
 ```
+
+### 3. Production Smoke Test Suite (Automated Verification)
+Execute the complete live production smoke test suite verifying all 5 core requirements against the live Render API, Neon Database, and Upstash Redis:
+```bash
+npx ts-node -r tsconfig-paths/register scripts/verify-all-smoke.ts
+```
+
+#### Production Smoke Test Results
+| Test Case | Scope & Verification | Result |
+| :--- | :--- | :---: |
+| **1. Auth & Session** | Google/Demo OAuth, JWT verification, `Set-Cookie` (`HttpOnly`, `Secure`, `SameSite=None`), `GET /me` | ✅ **PASS** |
+| **2. Schedule & Delivery** | CSV upload/parsing, atomic DB insert, delayed BullMQ job creation, Ethereal SMTP delivery | ✅ **PASS** |
+| **3. Rate Limit Reschedule** | Hourly limit = 3, schedule 5 emails; overflow automatically rescheduled to $HH+1\text{:00:00}$, 0 dropped | ✅ **PASS** |
+| **4. Restart Safety** | Worker restart mid-queue; Upstash Redis persistence + DB state ensures exactly-once execution (0 duplicates) | ✅ **PASS** |
+| **5. Search & Bull Board** | Full-text email search, Bull Board mounted at `/admin/queues` protected with HTTP Basic Auth | ✅ **PASS** |
 
 ---
 
