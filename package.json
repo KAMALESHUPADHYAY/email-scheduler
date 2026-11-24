@@ -7,7 +7,7 @@
     "apps/*"
   ],
   "scripts": {
-    "build": "npm run build --workspaces --if-present",
+    "build": "npm run db:generate && npm run build --workspace=@email-scheduler/core && npm run build --workspace=@email-scheduler/api && npm run build --workspace=@email-scheduler/worker",
     "dev:api": "npm run dev --workspace=@email-scheduler/api",
     "dev:worker": "npm run dev --workspace=@email-scheduler/worker",
     "dev:web": "npm run dev --workspace=@email-scheduler/web",
