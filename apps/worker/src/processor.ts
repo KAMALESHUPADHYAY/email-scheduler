@@ -1,0 +1,230 @@
+import { Job } from 'bullmq';
+import {
+  prisma,
+  redis,
+  logger,
+  config,
+  EmailJobData,
+  createEtherealTransporter,
+  getEmailPreviewUrl,
+  indexEmailDocument,
+  getNextHourWindow,
+  scheduleEmailJob,
+  sendSlackRateLimitAlert,
+} from '@email-scheduler/core';
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/**
+ * Checks and increments rate limit counters atomically in Redis.
+ * Returns true if allowed, false if limit exceeded.
+ */
+async function checkAndIncrementRateLimit(
+  senderId: string,
+  senderLimit: number,
+  globalLimit: number
+): Promise<{ allowed: boolean; hourKey: string; currentCount: number }> {
+  const hourKey = new Date().toISOString().substring(0, 13); // Format: "YYYY-MM-DDTHH"
+  const senderKey = `rl:sender:${senderId}:${hourKey}`;
+  const globalKey = `rl:global:${hourKey}`;
+
+  // Use Redis multi/pipeline to check and increment atomically
+  const multi = redis.multi();
+  multi.get(senderKey);
+  multi.get(globalKey);
+  const results = await multi.exec();
+
+  const currentSenderCount = Number(results?.[0]?.[1] || 0);
+  const currentGlobalCount = Number(results?.[1]?.[1] || 0);
+
+  if (currentSenderCount >= senderLimit || currentGlobalCount >= globalLimit) {
+    return { allowed: false, hourKey, currentCount: currentSenderCount };
+  }
+
+  // Under limit: atomic INCR and ensure 2h TTL
+  const incrMulti = redis.multi();
+  incrMulti.incr(senderKey);
+  incrMulti.expire(senderKey, 7200); // 2 hours TTL
+  incrMulti.incr(globalKey);
+  incrMulti.expire(globalKey, 7200);
+  await incrMulti.exec();
+
+  return { allowed: true, hourKey, currentCount: currentSenderCount + 1 };
+}
+
+/**
+ * Enforces per-sender minimum delay between consecutive email transmissions.
+ */
+async function enforceSenderSpacing(senderId: string, minDelayMs: number): Promise<void> {
+  const lastSendKey = `last_send:${senderId}`;
+  const lastSendStr = await redis.get(lastSendKey);
+
+  if (lastSendStr) {
+    const lastSendTime = Number(lastSendStr);
+    const elapsed = Date.now() - lastSendTime;
+    if (elapsed < minDelayMs) {
+      const waitTime = minDelayMs - elapsed;
+      logger.debug({ senderId, waitTime }, 'Enforcing per-sender MIN_DELAY_MS pacing');
+      await sleep(waitTime);
+    }
+  }
+
+  await redis.set(lastSendKey, Date.now().toString(), 'EX', 3600);
+}
+
+/**
+ * Main job processor for email queue
+ */
+export async function processEmailJob(job: Job<EmailJobData>): Promise<any> {
+  const { emailId, senderId } = job.data;
+
+  logger.info({ jobId: job.id, emailId, senderId }, 'Processing email job');
+
+  // 1. Load email from database; verify status
+  const email = await prisma.email.findUnique({
+    where: { id: emailId },
+    include: {
+      sender: {
+        include: {
+          user: true,
+        },
+      },
+    },
+  });
+
+  if (!email) {
+    logger.warn({ emailId }, 'Email record not found in database; exiting.');
+    return { skipped: true, reason: 'not_found' };
+  }
+
+  // Idempotency: if status != 'scheduled', exit (no double send)
+  if (email.status !== 'scheduled') {
+    logger.info(
+      { emailId, status: email.status },
+      'Email status is not "scheduled"; exiting without re-sending (idempotent).'
+    );
+    return { skipped: true, status: email.status };
+  }
+
+  const sender = email.sender;
+  if (!sender) {
+    logger.error({ emailId, senderId }, 'Associated sender not found');
+    throw new Error(`Sender ${senderId} not found`);
+  }
+
+  // 2. Check hourly rate limit (per-sender and global)
+  const effectiveSenderLimit = sender.hourly_limit || config.MAX_EMAILS_PER_HOUR_PER_SENDER;
+  const globalLimit = config.MAX_EMAILS_PER_HOUR;
+
+  const rateCheck = await checkAndIncrementRateLimit(
+    sender.id,
+    effectiveSenderLimit,
+    globalLimit
+  );
+
+  if (!rateCheck.allowed) {
+    logger.warn(
+      {
+        emailId,
+        senderId: sender.id,
+        hourKey: rateCheck.hourKey,
+        currentCount: rateCheck.currentCount,
+        limit: effectiveSenderLimit,
+      },
+      'Hourly limit reached! Rescheduling job to start of next hour.'
+    );
+
+    // Compute start of next hour + offset to preserve sequence order
+    const randomOffset = Math.floor(Math.random() * 30) * config.MIN_DELAY_MS;
+    const nextHourStart = getNextHourWindow(randomOffset);
+
+    // Update scheduled_at in DB
+    await prisma.email.update({
+      where: { id: emailId },
+      data: { scheduled_at: nextHourStart },
+    });
+
+    // Re-schedule in BullMQ
+    await scheduleEmailJob(job.data, nextHourStart);
+
+    // Trigger Slack notification ONCE per sender per hour (Redis SETNX handled inside)
+    if (sender.user.slack_token) {
+      await sendSlackRateLimitAlert({
+        senderId: sender.id,
+        senderEmail: sender.email,
+        hourKey: rateCheck.hourKey,
+        hourlyLimit: effectiveSenderLimit,
+        slackToken: sender.user.slack_token,
+        slackChannel: sender.user.slack_channel,
+      });
+    }
+
+    return {
+      rescheduled: true,
+      nextRun: nextHourStart.toISOString(),
+      reason: 'hourly_rate_limit_exceeded',
+    };
+  }
+
+  // 3. Enforce MIN_DELAY_MS pacing per sender
+  await enforceSenderSpacing(sender.id, config.MIN_DELAY_MS);
+
+  // 4. Send email via Nodemailer & Ethereal
+  try {
+    const transporter = createEtherealTransporter(sender);
+
+    const info = await transporter.sendMail({
+      from: `"${sender.user.name}" <${sender.email}>`,
+      to: email.recipient,
+      subject: email.subject,
+      text: email.body,
+      html: email.body.replace(/\n/g, '<br/>'),
+    });
+
+    const previewUrl = getEmailPreviewUrl(info) || undefined;
+    const sentAt = new Date();
+
+    // 5. Update DB status to 'sent'
+    const updatedEmail = await prisma.email.update({
+      where: { id: emailId },
+      data: {
+        status: 'sent',
+        sent_at: sentAt,
+        preview_url: previewUrl,
+        error: null,
+      },
+    });
+
+    // 6. Update Elasticsearch
+    await indexEmailDocument(updatedEmail);
+
+    logger.info(
+      {
+        emailId,
+        recipient: email.recipient,
+        previewUrl,
+        sentAt: sentAt.toISOString(),
+      },
+      'Email successfully sent via Ethereal SMTP'
+    );
+
+    return { success: true, emailId, previewUrl };
+  } catch (err: any) {
+    const errorMessage = err?.message || String(err);
+    logger.error({ emailId, err: errorMessage }, 'Failed to send email');
+
+    // Update DB status to 'failed'
+    const failedEmail = await prisma.email.update({
+      where: { id: emailId },
+      data: {
+        status: 'failed',
+        error: errorMessage,
+      },
+    });
+
+    // Update Elasticsearch
+    await indexEmailDocument(failedEmail);
+
+    throw err;
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "name": "@email-scheduler/core",
+  "version": "1.0.0",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "db:generate": "cross-env PRISMA_ENGINES_CHECKSUM_IGNORE_MISSING=1 prisma generate",
+    "db:migrate": "prisma migrate dev",
+    "db:push": "prisma db push"
+  },
+  "dependencies": {
+    "@elastic/elasticsearch": "^8.13.1",
+    "@prisma/client": "^5.14.0",
+    "@slack/web-api": "^7.1.0",
+    "bullmq": "^5.8.0",
+    "dotenv": "^16.4.5",
+    "ioredis": "^5.4.1",
+    "nodemailer": "^6.9.13",
+    "pino": "^9.1.0",
+    "pino-pretty": "^11.1.0",
+    "zod": "^3.23.8"
+  },
+  "devDependencies": {
+    "@types/node": "^20.12.12",
+    "@types/nodemailer": "^6.4.15",
+    "prisma": "^5.14.0",
+    "typescript": "^5.4.5"
+  }
+}

@@ -1,0 +1,88 @@
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+enum EmailStatus {
+  scheduled
+  sent
+  failed
+}
+
+model User {
+  id            String     @id @default(uuid())
+  google_id     String     @unique @map("google_id")
+  name          String
+  email         String     @unique
+  avatar_url    String?    @map("avatar_url")
+  slack_token   String?    @map("slack_token")
+  slack_channel String?    @map("slack_channel")
+  created_at    DateTime   @default(now()) @map("created_at")
+
+  senders       Sender[]
+  campaigns     Campaign[]
+
+  @@map("users")
+}
+
+model Sender {
+  id            String     @id @default(uuid())
+  user_id       String     @map("user_id")
+  email         String
+  ethereal_user String     @map("ethereal_user")
+  ethereal_pass String     @map("ethereal_pass")
+  smtp_host     String     @default("smtp.ethereal.email") @map("smtp_host")
+  smtp_port     Int        @default(587) @map("smtp_port")
+  hourly_limit  Int        @default(20) @map("hourly_limit")
+  created_at    DateTime   @default(now()) @map("created_at")
+
+  user          User       @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  campaigns     Campaign[]
+  emails        Email[]
+
+  @@map("senders")
+}
+
+model Campaign {
+  id            String     @id @default(uuid())
+  user_id       String     @map("user_id")
+  sender_id     String     @map("sender_id")
+  subject       String
+  body          String     @db.Text
+  start_time    DateTime   @map("start_time")
+  delay_seconds Int        @default(2) @map("delay_seconds")
+  hourly_limit  Int        @default(20) @map("hourly_limit")
+  created_at    DateTime   @default(now()) @map("created_at")
+
+  user          User       @relation(fields: [user_id], references: [id], onDelete: Cascade)
+  sender        Sender     @relation(fields: [sender_id], references: [id], onDelete: Cascade)
+  emails        Email[]
+
+  @@map("campaigns")
+}
+
+model Email {
+  id            String      @id @default(uuid())
+  campaign_id   String      @map("campaign_id")
+  sender_id     String      @map("sender_id")
+  recipient     String
+  subject       String
+  body          String      @db.Text
+  scheduled_at  DateTime    @map("scheduled_at")
+  sent_at       DateTime?   @map("sent_at")
+  status        EmailStatus @default(scheduled)
+  preview_url   String?     @map("preview_url")
+  error         String?     @db.Text
+  created_at    DateTime    @default(now()) @map("created_at")
+
+  campaign      Campaign    @relation(fields: [campaign_id], references: [id], onDelete: Cascade)
+  sender        Sender      @relation(fields: [sender_id], references: [id], onDelete: Cascade)
+
+  @@unique([campaign_id, recipient])
+  @@index([status, scheduled_at])
+  @@map("emails")
+}

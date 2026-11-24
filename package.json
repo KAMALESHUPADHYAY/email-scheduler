@@ -1,0 +1,27 @@
+{
+  "name": "email-scheduler-monorepo",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": [
+    "packages/*",
+    "apps/*"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces --if-present",
+    "dev:api": "npm run dev --workspace=@email-scheduler/api",
+    "dev:worker": "npm run dev --workspace=@email-scheduler/worker",
+    "dev:web": "npm run dev --workspace=@email-scheduler/web",
+    "db:generate": "npm run db:generate --workspace=@email-scheduler/core",
+    "db:migrate": "npm run db:migrate --workspace=@email-scheduler/core",
+    "db:push": "npm run db:push --workspace=@email-scheduler/core",
+    "seed": "ts-node -r tsconfig-paths/register scripts/seed-50-demo.ts",
+    "test:restart": "ts-node -r tsconfig-paths/register scripts/test-restart-safety.ts",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present"
+  },
+  "devDependencies": {
+    "ts-node": "^10.9.2",
+    "tsconfig-paths": "^4.2.0",
+    "typescript": "^5.4.5"
+  }
+}
