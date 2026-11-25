@@ -1,11 +1,11 @@
-import { Queue, QueueEvents, Job } from 'bullmq';
+import { Queue, Job } from 'bullmq';
 import { createRedisClient } from './redis';
 import { EmailJobData } from './types';
 import { logger } from './logger';
 
 export const EMAIL_QUEUE_NAME = 'email-scheduler-queue';
 
-// Reusable BullMQ connection instance
+// Reusable BullMQ queue connection instance
 export const queueRedisConnection = createRedisClient();
 
 export const emailQueue = new Queue<EmailJobData>(EMAIL_QUEUE_NAME, {
@@ -19,10 +19,6 @@ export const emailQueue = new Queue<EmailJobData>(EMAIL_QUEUE_NAME, {
     removeOnComplete: 1000,
     removeOnFail: 5000,
   },
-});
-
-export const queueEvents = new QueueEvents(EMAIL_QUEUE_NAME, {
-  connection: createRedisClient(),
 });
 
 /**
@@ -46,9 +42,16 @@ export async function scheduleEmailJob(
     }
   );
 
+  // Structured log at job enqueued
   logger.info(
-    { jobId: job.id, emailId: data.emailId, delayMs: delay, scheduledAt: scheduledAt.toISOString() },
-    'Scheduled email job in BullMQ'
+    {
+      event: 'job_enqueued',
+      emailId: data.emailId,
+      jobId: job.id,
+      delayMs: delay,
+      scheduledAt: scheduledAt.toISOString(),
+    },
+    `[ENQUEUE] Email job enqueued: emailId=${data.emailId}, delay=${delay}ms, scheduledAt=${scheduledAt.toISOString()}`
   );
 
   return job;

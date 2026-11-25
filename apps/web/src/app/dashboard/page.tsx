@@ -500,6 +500,24 @@ export default function DashboardPage() {
                   {health?.services.redis === 'healthy' ? 'Connected' : 'Online'}
                 </span>
               </div>
+
+              <div className="flex items-center justify-between text-neutral-600 dark:text-neutral-400">
+                <span className="flex items-center gap-1.5">
+                  <Activity className="w-3 h-3 text-emerald-500" />
+                  Worker Daemon
+                </span>
+                <span
+                  className={`font-semibold text-[11px] ${
+                    health?.services.worker === 'online'
+                      ? 'text-emerald-600'
+                      : 'text-amber-500'
+                  }`}
+                >
+                  {health?.services.worker === 'online'
+                    ? 'Online'
+                    : health?.services.worker || 'Active'}
+                </span>
+              </div>
             </div>
 
             <div className="pt-2 border-t border-neutral-200 dark:border-neutral-700/60 flex items-center justify-between">

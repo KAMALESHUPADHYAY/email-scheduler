@@ -10,10 +10,61 @@ Production-grade, distributed "Email Scheduler" web application and background q
 | :--- | :--- | :--- | :--- |
 | **Frontend Dashboard** | **Vercel** | [https://web-eight-dusky-46.vercel.app](https://web-eight-dusky-46.vercel.app) | 🟢 **Live (Next.js 14)** |
 | **API Web Service** | **Render** | [https://email-scheduler-api-433g.onrender.com](https://email-scheduler-api-433g.onrender.com) | 🟢 **Live (Express + TS)** |
+| **Debug Queue Status** | **Render** | [https://email-scheduler-api-433g.onrender.com/debug/queue-status](https://email-scheduler-api-433g.onrender.com/debug/queue-status) | 🟢 **Live (`admin` / `admin_secure_password_123`)** |
 | **Bull Board Dashboard** | **Render** | [https://email-scheduler-api-433g.onrender.com/admin/queues](https://email-scheduler-api-433g.onrender.com/admin/queues) | 🟢 **Live (`admin` / `admin_secure_password_123`)** |
-| **Dedicated Background Worker** | **Render** | [https://email-scheduler-worker-p9wo.onrender.com](https://email-scheduler-worker-p9wo.onrender.com) | 🟢 **Live (BullMQ Worker)** |
+| **Dedicated Background Worker** | **Render** | [https://email-scheduler-worker-p9wo.onrender.com](https://email-scheduler-worker-p9wo.onrender.com) | 🟢 **Live (BullMQ Worker + Health Server)** |
 | **PostgreSQL Database** | **Neon** | `ep-curly-pine-biur01pw-pooler.c-5.ap-southeast-1.aws.neon.tech` | 🟢 **Live (Migrations Deployed)** |
 | **Distributed Queue & Counters**| **Upstash Redis** | `renewing-filly-216225.upstash.io:6379` (TLS `rediss://`) | 🟢 **Live (`noeviction` for BullMQ)** |
+
+---
+
+## ⚡ Production Reliability, Render Worker Sleep & Upstash Budget
+
+### 1. Render Free Tier Web Service Sleep Workaround
+On Render's Free tier, services spin down / sleep after 15 minutes of inbound HTTP inactivity. Because the BullMQ worker is deployed as a Web Service (`email-scheduler-worker-p9wo.onrender.com`), it must receive periodic pings to remain awake:
+1. **Worker Built-In HTTP Server**: The worker runs a lightweight HTTP server on `PORT` handling `GET /health` and `GET /`, returning the worker status and heartbeat timestamp.
+2. **Redis Heartbeat**: The worker records a heartbeat timestamp to Redis (`worker:heartbeat`) every 15 seconds.
+3. **API /health Integration**: The API's `GET /health` queries Redis for the worker's heartbeat. If the heartbeat is younger than 90 seconds, the worker is reported as `online`.
+
+### 2. Free Uptime Monitor Setup (5-Minute Ping)
+To keep both the Render API and Worker awake 24/7 on free tiers:
+1. Go to [UptimeRobot.com](https://uptimerobot.com) (or [cron-job.org](https://cron-job.org)).
+2. Create a free account.
+3. Click **Add New Monitor**:
+   - **Monitor Type**: `HTTP(s)`
+   - **Friendly Name**: `MailPilot API`
+   - **URL (or IP)**: `https://email-scheduler-api-433g.onrender.com/health`
+   - **Monitoring Interval**: `5 minutes`
+4. Click **Add New Monitor** for the Worker:
+   - **Monitor Type**: `HTTP(s)`
+   - **Friendly Name**: `MailPilot Worker`
+   - **URL (or IP)**: `https://email-scheduler-worker-p9wo.onrender.com/health`
+   - **Monitoring Interval**: `5 minutes`
+5. Save both monitors. They will send HTTP requests every 5 minutes, preventing Render from sleeping the containers.
+
+### 3. Upstash Redis Command Budget
+Upstash Free tier provides a quota of **10,000 commands/day**:
+- Standard BullMQ defaults poll Redis every 5 seconds (~17,280 commands/day), which exceeds the free tier.
+- **MailPilot Optimization**:
+  - `drainDelay: 15000`: When queue is drained, waits 15 seconds before polling Redis (4 polls/min = 240/hr = ~5,760 commands/day).
+  - `stalledInterval: 60000`: Checks for stalled jobs every 60 seconds (60 checks/hr = 1,440 commands/day).
+  - `lockDuration: 60000`: 60-second lease prevents frequent lock renewals.
+- **Total Idle Usage**: ~7,200 commands/day, leaving **>2,800 commands/day** for active email scheduling, rate limiting, and heartbeats.
+
+### 4. Overdue Job Requeue on Startup
+When the worker starts or restarts, it automatically queries PostgreSQL for any email with status `scheduled` whose `scheduled_at` timestamp has elapsed and which has no active/delayed BullMQ job. It re-enqueues them with `jobId = email.id` (idempotent, never creating duplicate jobs).
+
+### 5. Diagnostic Endpoint: GET /debug/queue-status
+Protected by basic auth (`admin` / `admin_secure_password_123`):
+```bash
+curl -u admin:admin_secure_password_123 https://email-scheduler-api-433g.onrender.com/debug/queue-status
+```
+Returns:
+- Redis & PostgreSQL ping latencies.
+- BullMQ job counts (`waiting`, `delayed`, `active`, `failed`, `completed`).
+- Oldest delayed job's target scheduled time (UTC) and remaining delay ms.
+- Worker heartbeat timestamp (UTC) and age in seconds.
+- Last 5 failed jobs with failure reasons.
 
 ---
 

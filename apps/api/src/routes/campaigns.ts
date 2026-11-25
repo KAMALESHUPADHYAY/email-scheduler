@@ -127,12 +127,27 @@ campaignsRouter.post(
       });
     }
 
-    // 4. Timing & parameters
-    const parsedStartTime = start_time ? new Date(start_time) : new Date();
-    const effectiveStartTime =
-      isNaN(parsedStartTime.getTime()) || parsedStartTime.getTime() < Date.now()
-        ? new Date()
-        : parsedStartTime;
+    // 4. Timing & parameters (UTC validation & clamping)
+    const nowMs = Date.now();
+    const parsedStartTime = start_time ? new Date(start_time) : new Date(nowMs);
+    let effectiveStartTime: Date;
+
+    if (isNaN(parsedStartTime.getTime())) {
+      logger.warn({ start_time }, 'Invalid start_time passed; defaulting to now');
+      effectiveStartTime = new Date(nowMs);
+    } else if (parsedStartTime.getTime() < nowMs - 60000) {
+      // More than 1 minute in the past: clamp to now
+      logger.warn(
+        { start_time, parsedUtc: parsedStartTime.toISOString(), nowUtc: new Date(nowMs).toISOString() },
+        'Start time is more than 1 minute in the past; clamped to now (UTC)'
+      );
+      effectiveStartTime = new Date(nowMs);
+    } else if (parsedStartTime.getTime() < nowMs) {
+      // Minor negative delta within 1 min: clamp to now
+      effectiveStartTime = new Date(nowMs);
+    } else {
+      effectiveStartTime = parsedStartTime;
+    }
 
     const delayNum = Number(delay_seconds);
     const effectiveDelaySec = !isNaN(delayNum) && delayNum > 0

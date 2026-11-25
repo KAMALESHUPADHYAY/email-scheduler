@@ -73,12 +73,15 @@ export interface CampaignDetail extends CampaignItem {
 export interface HealthServiceStatus {
   database: 'healthy' | 'unhealthy';
   redis: 'healthy' | 'unhealthy';
+  worker?: 'online' | 'sleeping' | 'unreachable' | string;
 }
 
 export interface HealthResponse {
   status: 'ok' | 'degraded';
   timestamp: string;
   services: HealthServiceStatus;
+  workerHeartbeat?: string | null;
+  heartbeatAgeSeconds?: number | null;
 }
 
 export interface CampaignCreationResult {

@@ -15,6 +15,7 @@ import { campaignsRouter } from './routes/campaigns';
 import { emailsRouter } from './routes/emails';
 import { searchRouter } from './routes/search';
 import { queuesRouter } from './routes/queues';
+import { debugRouter } from './routes/debug';
 import { errorHandler } from './middleware/errorHandler';
 
 const app = express();
@@ -64,7 +65,7 @@ const authLimiter = rateLimit({
   message: { success: false, error: 'Too many authentication attempts. Please try again later.' },
 });
 
-// Health check endpoint
+// Health check endpoint (checks DB, Redis, and Worker Heartbeat)
 app.get('/health', async (req, res) => {
   const dbOk = await checkDatabaseConnection();
   let redisOk = false;
@@ -75,13 +76,33 @@ app.get('/health', async (req, res) => {
     redisOk = false;
   }
 
-  res.json({
-    status: dbOk && redisOk ? 'ok' : 'degraded',
+  let workerStatus = 'sleeping';
+  let lastHeartbeat: string | null = null;
+  let heartbeatAgeSeconds: number | null = null;
+
+  try {
+    lastHeartbeat = await redis.get('worker:heartbeat');
+    if (lastHeartbeat) {
+      const ageMs = Date.now() - new Date(lastHeartbeat).getTime();
+      heartbeatAgeSeconds = Math.round(ageMs / 1000);
+      workerStatus = ageMs < 90000 ? 'online' : 'sleeping';
+    }
+  } catch {
+    workerStatus = 'unreachable';
+  }
+
+  const isHealthy = dbOk && redisOk && workerStatus === 'online';
+
+  res.status(isHealthy ? 200 : (dbOk && redisOk ? 200 : 503)).json({
+    status: isHealthy ? 'ok' : 'degraded',
     timestamp: new Date().toISOString(),
     services: {
       database: dbOk ? 'healthy' : 'unhealthy',
       redis: redisOk ? 'healthy' : 'unhealthy',
+      worker: workerStatus,
     },
+    workerHeartbeat: lastHeartbeat,
+    heartbeatAgeSeconds,
   });
 });
 
@@ -95,6 +116,7 @@ app.use('/campaigns', campaignsRouter);
 app.use('/emails', emailsRouter);
 app.use('/search', searchRouter);
 app.use('/admin/queues', queuesRouter);
+app.use('/debug', debugRouter);
 
 // Centralized Error Handling
 app.use(errorHandler);

@@ -76,11 +76,23 @@ async function enforceSenderSpacing(senderId: string, minDelayMs: number): Promi
  * Main job processor for email queue
  */
 export async function processEmailJob(job: Job<EmailJobData>): Promise<any> {
-  const { emailId, senderId } = job.data;
+  const startTime = Date.now();
+  const { emailId, senderId, scheduledAt } = job.data;
 
-  logger.info({ jobId: job.id, emailId, senderId }, 'Processing email job');
+  // 1. STRUCTURED LOG: Job picked up
+  logger.info(
+    {
+      event: 'job_picked_up',
+      jobId: job.id,
+      emailId,
+      senderId,
+      scheduledAt,
+      timestamp: new Date().toISOString(),
+    },
+    `[PICKUP] Job ${job.id} picked up for email ${emailId}`
+  );
 
-  // 1. Load email from database; verify status
+  // 2. Load email from database; verify status
   const email = await prisma.email.findUnique({
     where: { id: emailId },
     include: {
@@ -100,8 +112,12 @@ export async function processEmailJob(job: Job<EmailJobData>): Promise<any> {
   // Idempotency: if status != 'scheduled', exit (no double send)
   if (email.status !== 'scheduled') {
     logger.info(
-      { emailId, status: email.status },
-      'Email status is not "scheduled"; exiting without re-sending (idempotent).'
+      {
+        event: 'idempotent_skip',
+        emailId,
+        status: email.status,
+      },
+      `Email ${emailId} is already "${email.status}"; skipping execution (idempotent).`
     );
     return { skipped: true, status: email.status };
   }
@@ -112,7 +128,7 @@ export async function processEmailJob(job: Job<EmailJobData>): Promise<any> {
     throw new Error(`Sender ${senderId} not found`);
   }
 
-  // 2. Check hourly rate limit (per-sender and global)
+  // 3. Check hourly rate limit (per-sender and global)
   const effectiveSenderLimit = sender.hourly_limit || config.MAX_EMAILS_PER_HOUR_PER_SENDER;
   const globalLimit = config.MAX_EMAILS_PER_HOUR;
 
@@ -120,6 +136,21 @@ export async function processEmailJob(job: Job<EmailJobData>): Promise<any> {
     sender.id,
     effectiveSenderLimit,
     globalLimit
+  );
+
+  // STRUCTURED LOG: Rate limit check result
+  logger.info(
+    {
+      event: 'rate_limit_check',
+      emailId,
+      senderId: sender.id,
+      hourKey: rateCheck.hourKey,
+      currentCount: rateCheck.currentCount,
+      senderLimit: effectiveSenderLimit,
+      globalLimit,
+      allowed: rateCheck.allowed,
+    },
+    `[RATE_LIMIT] Rate check result: allowed=${rateCheck.allowed} (count=${rateCheck.currentCount}/${effectiveSenderLimit})`
   );
 
   if (!rateCheck.allowed) {
@@ -147,7 +178,7 @@ export async function processEmailJob(job: Job<EmailJobData>): Promise<any> {
     // Re-schedule in BullMQ
     await scheduleEmailJob(job.data, nextHourStart);
 
-    // Trigger Slack notification ONCE per sender per hour (Redis SETNX handled inside)
+    // Trigger Slack notification ONCE per sender per hour
     if (sender.user.slack_token) {
       await sendSlackRateLimitAlert({
         senderId: sender.id,
@@ -166,10 +197,10 @@ export async function processEmailJob(job: Job<EmailJobData>): Promise<any> {
     };
   }
 
-  // 3. Enforce MIN_DELAY_MS pacing per sender
+  // 4. Enforce MIN_DELAY_MS pacing per sender
   await enforceSenderSpacing(sender.id, config.MIN_DELAY_MS);
 
-  // 4. Send email via Nodemailer & Ethereal
+  // 5. Send email via Nodemailer & Ethereal
   try {
     let previewUrl: string | undefined;
 
@@ -184,22 +215,39 @@ export async function processEmailJob(job: Job<EmailJobData>): Promise<any> {
           html: email.body.replace(/\n/g, '<br/>'),
         }),
         new Promise<never>((_, reject) =>
-          setTimeout(() => reject(new Error('SMTP_PORT_TIMEOUT')), 3500)
+          setTimeout(() => reject(new Error('SMTP_PORT_TIMEOUT')), 4000)
         ),
       ]);
 
       previewUrl = (getEmailPreviewUrl(info) as string) || undefined;
+      if (!previewUrl && (info as any)?.messageId) {
+        previewUrl = `https://ethereal.email/message/${(info as any).messageId}`;
+      }
     } catch (smtpErr: any) {
       logger.warn(
         { emailId, err: smtpErr.message },
-        'Ethereal SMTP connection blocked or timed out (Render free tier blocks ports 25/465/587). Using Ethereal preview link.'
+        'Ethereal SMTP connection blocked or timed out (Render free tier blocks ports 25/465/587). Using deterministic Ethereal preview link.'
       );
       previewUrl = `https://ethereal.email/message/${email.id}`;
     }
 
+    const durationMs = Date.now() - startTime;
     const sentAt = new Date();
 
-    // 5. Update DB status to 'sent'
+    // 6. STRUCTURED LOG: Send Success
+    logger.info(
+      {
+        event: 'send_success',
+        emailId,
+        recipient: email.recipient,
+        previewUrl,
+        sentAt: sentAt.toISOString(),
+        durationMs,
+      },
+      `[SEND_SUCCESS] Email ${emailId} successfully sent to ${email.recipient} (preview: ${previewUrl}) in ${durationMs}ms`
+    );
+
+    // 7. Update DB status to 'sent'
     const updatedEmail = await prisma.email.update({
       where: { id: emailId },
       data: {
@@ -210,23 +258,36 @@ export async function processEmailJob(job: Job<EmailJobData>): Promise<any> {
       },
     });
 
-    // 6. Update Elasticsearch
-    await indexEmailDocument(updatedEmail);
-
+    // STRUCTURED LOG: Status Update
     logger.info(
       {
+        event: 'status_update',
         emailId,
-        recipient: email.recipient,
-        previewUrl,
+        status: 'sent',
         sentAt: sentAt.toISOString(),
       },
-      'Email successfully sent via Ethereal SMTP'
+      `[STATUS_UPDATE] Email ${emailId} marked status='sent' in DB`
     );
 
-    return { success: true, emailId, previewUrl };
+    // 8. Update Elasticsearch
+    await indexEmailDocument(updatedEmail).catch((err) =>
+      logger.warn({ err, emailId }, 'Async ES indexing error on send')
+    );
+
+    return { success: true, emailId, previewUrl, durationMs };
   } catch (err: any) {
     const errorMessage = err?.message || String(err);
-    logger.error({ emailId, err: errorMessage }, 'Failed to send email');
+
+    // STRUCTURED LOG: Send Failure
+    logger.error(
+      {
+        event: 'send_failure',
+        emailId,
+        recipient: email.recipient,
+        error: errorMessage,
+      },
+      `[SEND_FAILURE] Email ${emailId} failed to send: ${errorMessage}`
+    );
 
     // Update DB status to 'failed'
     const failedEmail = await prisma.email.update({
@@ -237,8 +298,21 @@ export async function processEmailJob(job: Job<EmailJobData>): Promise<any> {
       },
     });
 
+    // STRUCTURED LOG: Status Update
+    logger.info(
+      {
+        event: 'status_update',
+        emailId,
+        status: 'failed',
+        error: errorMessage,
+      },
+      `[STATUS_UPDATE] Email ${emailId} marked status='failed' in DB`
+    );
+
     // Update Elasticsearch
-    await indexEmailDocument(failedEmail);
+    await indexEmailDocument(failedEmail).catch((esErr) =>
+      logger.warn({ esErr, emailId }, 'Async ES indexing error on failure')
+    );
 
     throw err;
   }

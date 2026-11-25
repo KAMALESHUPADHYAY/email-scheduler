@@ -194,7 +194,11 @@ export const ComposeModal: React.FC<ComposeModalProps> = ({
       const formData = new FormData();
       formData.append('subject', subject);
       formData.append('body', body);
-      formData.append('start_time', new Date(startTime).toISOString());
+      let sendDate = new Date(startTime);
+      if (isNaN(sendDate.getTime()) || sendDate.getTime() < Date.now() - 60000) {
+        sendDate = new Date(); // Clamp to now if in the past
+      }
+      formData.append('start_time', sendDate.toISOString());
       formData.append('delay_seconds', String(delaySeconds));
       formData.append('hourly_limit', String(hourlyLimit));
 

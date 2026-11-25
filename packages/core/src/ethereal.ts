@@ -41,9 +41,9 @@ export function createEtherealTransporter(credentials: {
       user: credentials.ethereal_user,
       pass: credentials.ethereal_pass,
     },
-    connectionTimeout: 3000,
-    greetingTimeout: 3000,
-    socketTimeout: 3000,
+    connectionTimeout: 4000,
+    greetingTimeout: 4000,
+    socketTimeout: 4000,
   });
 }
 
@@ -56,34 +56,50 @@ export async function ensureUserSender(userId: string, userEmail: string) {
     where: { user_id: userId },
   });
 
-  if (!sender) {
+  // If sender has mock or missing credentials, attempt to create real Ethereal credentials
+  if (!sender || sender.ethereal_user === 'mock_ethereal_user') {
     try {
       const ethereal = await createEtherealAccount();
-      sender = await prisma.sender.create({
-        data: {
-          user_id: userId,
-          email: userEmail,
-          ethereal_user: ethereal.user,
-          ethereal_pass: ethereal.pass,
-          smtp_host: ethereal.smtp.host,
-          smtp_port: ethereal.smtp.port,
-          hourly_limit: config.MAX_EMAILS_PER_HOUR_PER_SENDER,
-        },
-      });
-      logger.info({ userId, senderEmail: userEmail }, 'Created Ethereal sender for user');
-    } catch (err) {
-      logger.error({ err }, 'Failed to create Ethereal account, falling back to mock sender');
-      sender = await prisma.sender.create({
-        data: {
-          user_id: userId,
-          email: userEmail,
-          ethereal_user: 'mock_ethereal_user',
-          ethereal_pass: 'mock_ethereal_pass',
-          smtp_host: 'smtp.ethereal.email',
-          smtp_port: 587,
-          hourly_limit: config.MAX_EMAILS_PER_HOUR_PER_SENDER,
-        },
-      });
+      if (!sender) {
+        sender = await prisma.sender.create({
+          data: {
+            user_id: userId,
+            email: userEmail,
+            ethereal_user: ethereal.user,
+            ethereal_pass: ethereal.pass,
+            smtp_host: ethereal.smtp.host,
+            smtp_port: ethereal.smtp.port,
+            hourly_limit: config.MAX_EMAILS_PER_HOUR_PER_SENDER,
+          },
+        });
+        logger.info({ userId, senderEmail: userEmail, etherealUser: ethereal.user }, 'Created Ethereal sender for user');
+      } else {
+        sender = await prisma.sender.update({
+          where: { id: sender.id },
+          data: {
+            ethereal_user: ethereal.user,
+            ethereal_pass: ethereal.pass,
+            smtp_host: ethereal.smtp.host,
+            smtp_port: ethereal.smtp.port,
+          },
+        });
+        logger.info({ userId, senderEmail: userEmail, etherealUser: ethereal.user }, 'Upgraded sender with real Ethereal credentials');
+      }
+    } catch (err: any) {
+      logger.error({ err: err.message, userId }, 'Failed to create Ethereal account, falling back to mock sender');
+      if (!sender) {
+        sender = await prisma.sender.create({
+          data: {
+            user_id: userId,
+            email: userEmail,
+            ethereal_user: 'mock_ethereal_user',
+            ethereal_pass: 'mock_ethereal_pass',
+            smtp_host: 'smtp.ethereal.email',
+            smtp_port: 587,
+            hourly_limit: config.MAX_EMAILS_PER_HOUR_PER_SENDER,
+          },
+        });
+      }
     }
   }
 

@@ -2,15 +2,20 @@ import Redis, { RedisOptions } from 'ioredis';
 import { config } from './config';
 import { logger } from './logger';
 
-export function createRedisClient(options?: RedisOptions): Redis {
+/**
+ * Returns a centralized, standardized ioredis options configuration.
+ * Enforces maxRetriesPerRequest: null (required by BullMQ) and TLS for rediss://.
+ */
+export function getRedisOptions(overrides?: RedisOptions): RedisOptions {
   const isTls = config.REDIS_URL.startsWith('rediss://');
 
-  const redisOptions: RedisOptions = {
+  return {
     maxRetriesPerRequest: null, // Required by BullMQ
     enableReadyCheck: false,
-    lazyConnect: true, // Don't crash immediately if Redis is unreachable on start
+    lazyConnect: true, // Don't crash immediately if Redis is temporarily unreachable on start
     retryStrategy(times) {
-      const delay = Math.min(times * 200, 3000);
+      // Reconnect with capped exponential backoff
+      const delay = Math.min(times * 250, 3000);
       return delay;
     },
     ...(isTls
@@ -20,10 +25,12 @@ export function createRedisClient(options?: RedisOptions): Redis {
           },
         }
       : {}),
-    ...options,
+    ...overrides,
   };
+}
 
-  const client = new Redis(config.REDIS_URL, redisOptions);
+export function createRedisClient(options?: RedisOptions): Redis {
+  const client = new Redis(config.REDIS_URL, getRedisOptions(options));
 
   client.on('connect', () => {
     logger.info('Connected to Redis');
@@ -36,5 +43,5 @@ export function createRedisClient(options?: RedisOptions): Redis {
   return client;
 }
 
-// Singleton Redis instance for rate limiting, locking, and general caching
+// Singleton Redis instance for rate limiting, locking, heartbeat, and general caching
 export const redis = createRedisClient();
