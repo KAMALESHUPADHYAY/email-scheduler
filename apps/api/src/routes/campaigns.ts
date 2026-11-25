@@ -240,3 +240,82 @@ campaignsRouter.post(
     });
   }
 );
+
+// 7. GET /campaigns - List all campaigns for current user with email counts & progress
+campaignsRouter.get('/', requireAuth, async (req: Request, res: Response) => {
+  const user = req.user!;
+
+  const campaigns = await prisma.campaign.findMany({
+    where: { user_id: user.id },
+    orderBy: { created_at: 'desc' },
+    include: {
+      emails: {
+        select: {
+          id: true,
+          status: true,
+          scheduled_at: true,
+          sent_at: true,
+        },
+      },
+    },
+  });
+
+  const formatted = campaigns.map((c) => {
+    const total = c.emails.length;
+    const sent = c.emails.filter((e) => e.status === 'sent').length;
+    const scheduled = c.emails.filter((e) => e.status === 'scheduled').length;
+    const failed = c.emails.filter((e) => e.status === 'failed').length;
+    const progress = total > 0 ? Math.round((sent / total) * 100) : 0;
+    return {
+      id: c.id,
+      subject: c.subject,
+      body: c.body,
+      start_time: c.start_time,
+      delay_seconds: c.delay_seconds,
+      hourly_limit: c.hourly_limit,
+      created_at: c.created_at,
+      total,
+      sent,
+      scheduled,
+      failed,
+      progress,
+    };
+  });
+
+  return res.json({ success: true, data: formatted });
+});
+
+// 8. GET /campaigns/:id - Get single campaign with full email items list
+campaignsRouter.get('/:id', requireAuth, async (req: Request, res: Response) => {
+  const user = req.user!;
+  const campaign = await prisma.campaign.findFirst({
+    where: { id: req.params.id, user_id: user.id },
+    include: {
+      emails: {
+        orderBy: { scheduled_at: 'asc' },
+      },
+    },
+  });
+
+  if (!campaign) {
+    return res.status(404).json({ success: false, error: 'Campaign not found' });
+  }
+
+  const total = campaign.emails.length;
+  const sent = campaign.emails.filter((e) => e.status === 'sent').length;
+  const scheduled = campaign.emails.filter((e) => e.status === 'scheduled').length;
+  const failed = campaign.emails.filter((e) => e.status === 'failed').length;
+  const progress = total > 0 ? Math.round((sent / total) * 100) : 0;
+
+  return res.json({
+    success: true,
+    data: {
+      ...campaign,
+      total,
+      sent,
+      scheduled,
+      failed,
+      progress,
+    },
+  });
+});
