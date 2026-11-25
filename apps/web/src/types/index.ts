@@ -48,6 +48,37 @@ export interface ApiResponse<T> {
   data?: T;
   error?: string;
   pagination?: Pagination;
+  source?: string;
+}
+
+export interface CampaignItem {
+  id: string;
+  subject: string;
+  body: string;
+  start_time: string;
+  delay_seconds: number;
+  hourly_limit: number;
+  created_at: string;
+  total: number;
+  sent: number;
+  scheduled: number;
+  failed: number;
+  progress: number;
+}
+
+export interface CampaignDetail extends CampaignItem {
+  emails: EmailItem[];
+}
+
+export interface HealthServiceStatus {
+  database: 'healthy' | 'unhealthy';
+  redis: 'healthy' | 'unhealthy';
+}
+
+export interface HealthResponse {
+  status: 'ok' | 'degraded';
+  timestamp: string;
+  services: HealthServiceStatus;
 }
 
 export interface CampaignCreationResult {
@@ -64,4 +95,9 @@ export interface CampaignCreationResult {
   invalidCount: number;
   duplicateCount: number;
   scheduledEmails: number;
+}
+
+export interface HourlyChartPoint {
+  hour: string;
+  count: number;
 }

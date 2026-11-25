@@ -1,91 +1,83 @@
 import React from 'react';
+import { clsx } from 'clsx';
+import { twMerge } from 'tailwind-merge';
 
-export interface Column<T> {
-  header: string;
-  accessorKey?: keyof T;
-  cell?: (item: T) => React.ReactNode;
-  className?: string;
-}
-
-export interface TableProps<T> {
-  columns: Column<T>[];
-  data: T[];
-  isLoading?: boolean;
-  emptyState?: React.ReactNode;
-  rowKey: (item: T) => string;
-}
-
-export function Table<T>({
-  columns,
-  data,
-  isLoading = false,
-  emptyState,
-  rowKey,
-}: TableProps<T>) {
-  if (isLoading) {
-    return (
-      <div className="w-full bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-xl overflow-hidden shadow-sm">
-        <div className="divide-y divide-surface-200 dark:divide-surface-800">
-          {[...Array(5)].map((_, i) => (
-            <div key={i} className="flex items-center space-x-4 p-4 animate-pulse">
-              <div className="h-4 bg-surface-200 dark:bg-surface-800 rounded w-1/4"></div>
-              <div className="h-4 bg-surface-200 dark:bg-surface-800 rounded w-1/3"></div>
-              <div className="h-4 bg-surface-200 dark:bg-surface-800 rounded w-1/5"></div>
-              <div className="h-4 bg-surface-200 dark:bg-surface-800 rounded w-1/6"></div>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
-  }
-
-  if (data.length === 0 && emptyState) {
-    return <div className="w-full">{emptyState}</div>;
-  }
-
-  return (
-    <div className="w-full bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-xl overflow-hidden shadow-sm">
-      <div className="overflow-x-auto">
-        <table className="w-full text-left text-sm border-collapse">
-          <thead>
-            <tr className="border-b border-surface-200 dark:border-surface-800 bg-surface-50 dark:bg-surface-950/50">
-              {columns.map((col, idx) => (
-                <th
-                  key={idx}
-                  className={`px-5 py-3.5 text-xs font-semibold uppercase tracking-wider text-surface-500 dark:text-surface-400 ${
-                    col.className || ''
-                  }`}
-                >
-                  {col.header}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-surface-100 dark:divide-surface-800">
-            {data.map((item) => (
-              <tr
-                key={rowKey(item)}
-                className="hover:bg-surface-50/80 dark:hover:bg-surface-800/50 transition-colors"
-              >
-                {columns.map((col, idx) => (
-                  <td
-                    key={idx}
-                    className={`px-5 py-4 text-surface-900 dark:text-surface-100 ${
-                      col.className || ''
-                    }`}
-                  >
-                    {col.cell
-                      ? col.cell(item)
-                      : col.accessorKey
-                      ? String(item[col.accessorKey] ?? '')
-                      : null}
-                  </td>
-                ))}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
+export const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTMLTableElement>>(
+  ({ className, ...props }, ref) => (
+    <div className="w-full overflow-x-auto">
+      <table
+        ref={ref}
+        className={twMerge(clsx('w-full caption-bottom text-sm text-left border-collapse', className))}
+        {...props}
+      />
     </div>
-  );
-}
+  )
+);
+Table.displayName = 'Table';
+
+export const TableHeader = React.forwardRef<HTMLTableSectionElement, React.HTMLAttributes<HTMLTableSectionElement>>(
+  ({ className, ...props }, ref) => (
+    <thead
+      ref={ref}
+      className={twMerge(
+        clsx('bg-neutral-50 dark:bg-neutral-800/50 border-b border-neutral-200 dark:border-neutral-800', className)
+      )}
+      {...props}
+    />
+  )
+);
+TableHeader.displayName = 'TableHeader';
+
+export const TableBody = React.forwardRef<HTMLTableSectionElement, React.HTMLAttributes<HTMLTableSectionElement>>(
+  ({ className, ...props }, ref) => (
+    <tbody
+      ref={ref}
+      className={twMerge(clsx('divide-y divide-neutral-200 dark:divide-neutral-800/60', className))}
+      {...props}
+    />
+  )
+);
+TableBody.displayName = 'TableBody';
+
+export const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttributes<HTMLTableRowElement>>(
+  ({ className, ...props }, ref) => (
+    <tr
+      ref={ref}
+      className={twMerge(
+        clsx(
+          'transition-colors hover:bg-neutral-50/70 dark:hover:bg-neutral-800/40 cursor-default select-none',
+          className
+        )
+      )}
+      {...props}
+    />
+  )
+);
+TableRow.displayName = 'TableRow';
+
+export const TableHead = React.forwardRef<HTMLTableCellElement, React.ThHTMLAttributes<HTMLTableCellElement>>(
+  ({ className, ...props }, ref) => (
+    <th
+      ref={ref}
+      className={twMerge(
+        clsx(
+          'h-10 px-4 text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 text-left align-middle',
+          className
+        )
+      )}
+      {...props}
+    />
+  )
+);
+TableHead.displayName = 'TableHead';
+
+export const TableCell = React.forwardRef<HTMLTableCellElement, React.TdHTMLAttributes<HTMLTableCellElement>>(
+  ({ className, ...props }, ref) => (
+    <td
+      ref={ref}
+      className={twMerge(clsx('px-4 py-3.5 align-middle text-sm text-neutral-800 dark:text-neutral-200', className))}
+      {...props}
+    />
+  )
+);
+TableCell.displayName = 'TableCell';

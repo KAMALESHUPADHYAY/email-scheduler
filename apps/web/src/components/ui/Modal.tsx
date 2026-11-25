@@ -1,4 +1,6 @@
-import React, { useEffect } from 'react';
+'use client';
+
+import React, { useEffect, useRef } from 'react';
 import { X } from 'lucide-react';
 
 export interface ModalProps {
@@ -18,6 +20,8 @@ export const Modal: React.FC<ModalProps> = ({
   children,
   maxWidth = 'max-w-2xl',
 }) => {
+  const dialogRef = useRef<HTMLDivElement>(null);
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -35,29 +39,38 @@ export const Modal: React.FC<ModalProps> = ({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto">
+    <div
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="modal-title"
+      className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 overflow-y-auto"
+    >
       {/* Backdrop */}
       <div
-        className="fixed inset-0 bg-surface-950/60 backdrop-blur-sm transition-opacity"
+        className="fixed inset-0 bg-neutral-950/70 backdrop-blur-sm transition-opacity animate-in fade-in duration-200"
         onClick={onClose}
+        aria-hidden="true"
       />
 
       {/* Modal Dialog */}
       <div
-        className={`relative w-full ${maxWidth} bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-2xl shadow-2xl z-10 overflow-hidden transform transition-all my-8`}
+        ref={dialogRef}
+        className={`relative w-full ${maxWidth} bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-2xl shadow-popover z-10 overflow-hidden transform transition-all my-8 animate-in zoom-in-95 duration-200`}
       >
-        <div className="flex items-center justify-between px-6 py-5 border-b border-surface-200 dark:border-surface-800">
+        <div className="flex items-center justify-between px-6 py-5 border-b border-neutral-200 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-800/30">
           <div>
-            <h3 className="text-lg font-bold text-surface-900 dark:text-surface-100">
+            <h3 id="modal-title" className="text-lg font-bold text-neutral-900 dark:text-neutral-100">
               {title}
             </h3>
             {description && (
-              <p className="text-sm text-surface-500 mt-0.5">{description}</p>
+              <p className="text-xs text-neutral-500 dark:text-neutral-400 mt-0.5">{description}</p>
             )}
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="p-1.5 rounded-lg text-surface-400 hover:text-surface-600 dark:hover:text-surface-200 hover:bg-surface-100 dark:hover:bg-surface-800 transition-colors"
+            aria-label="Close modal"
+            className="p-1.5 rounded-lg text-neutral-400 hover:text-neutral-600 dark:hover:text-neutral-200 hover:bg-neutral-100 dark:hover:bg-neutral-800 transition-colors focus:outline-none focus:ring-2 focus:ring-primary-500"
           >
             <X className="w-5 h-5" />
           </button>

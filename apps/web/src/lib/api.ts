@@ -1,12 +1,21 @@
-import { ApiResponse, User, Sender, EmailItem, CampaignCreationResult } from '../types';
+import {
+  User,
+  Sender,
+  EmailItem,
+  Pagination,
+  CampaignItem,
+  CampaignDetail,
+  HealthResponse,
+  CampaignCreationResult,
+} from '../types';
 
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:4000';
+export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://email-scheduler-api-433g.onrender.com';
 
 class ApiClient {
   private baseUrl: string;
 
   constructor(baseUrl: string) {
-    this.baseUrl = baseUrl;
+    this.baseUrl = baseUrl.replace(/\/+$/, '');
   }
 
   private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
@@ -41,11 +50,12 @@ class ApiClient {
       }
 
       return data as T;
-    } catch (err: any) {
-      if (typeof window !== 'undefined' && !err.message.includes('HTTP')) {
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Network error';
+      if (typeof window !== 'undefined' && !message.includes('HTTP')) {
         window.dispatchEvent(
           new CustomEvent('app-toast', {
-            detail: { type: 'error', message: err.message || 'Network error' },
+            detail: { type: 'error', message },
           })
         );
       }
@@ -62,12 +72,17 @@ class ApiClient {
     return this.request('/auth/logout', { method: 'POST' });
   }
 
+  // System Health
+  async getHealth(): Promise<HealthResponse> {
+    return this.request('/health');
+  }
+
   // Emails list
   async getEmails(
     status: 'scheduled' | 'sent' | 'failed',
     page = 1,
     limit = 20
-  ): Promise<{ success: boolean; data: EmailItem[]; pagination: any }> {
+  ): Promise<{ success: boolean; data: EmailItem[]; pagination: Pagination }> {
     return this.request(`/emails?status=${status}&page=${page}&limit=${limit}`);
   }
 
@@ -77,10 +92,19 @@ class ApiClient {
     status = 'all',
     page = 1,
     limit = 20
-  ): Promise<{ success: boolean; data: EmailItem[]; pagination: any; source: string }> {
+  ): Promise<{ success: boolean; data: EmailItem[]; pagination: Pagination; source: string }> {
     return this.request(
       `/search?q=${encodeURIComponent(query)}&status=${encodeURIComponent(status)}&page=${page}&limit=${limit}`
     );
+  }
+
+  // Campaigns
+  async getCampaigns(): Promise<{ success: boolean; data: CampaignItem[] }> {
+    return this.request('/campaigns');
+  }
+
+  async getCampaign(id: string): Promise<{ success: boolean; data: CampaignDetail }> {
+    return this.request(`/campaigns/${id}`);
   }
 
   // Create Campaign

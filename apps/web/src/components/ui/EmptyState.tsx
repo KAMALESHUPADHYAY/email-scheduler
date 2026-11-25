@@ -1,29 +1,39 @@
 import React from 'react';
-import { MailQuestion } from 'lucide-react';
+import { Button } from './Button';
 
 export interface EmptyStateProps {
   icon?: React.ReactNode;
   title: string;
   description: string;
-  action?: React.ReactNode;
+  actionLabel?: string;
+  onAction?: () => void;
 }
 
 export const EmptyState: React.FC<EmptyStateProps> = ({
   icon,
   title,
   description,
-  action,
+  actionLabel,
+  onAction,
 }) => {
   return (
-    <div className="flex flex-col items-center justify-center p-12 text-center bg-white dark:bg-surface-900 border border-surface-200 dark:border-surface-800 rounded-xl shadow-sm">
-      <div className="w-14 h-14 rounded-2xl bg-surface-100 dark:bg-surface-800 flex items-center justify-center text-surface-500 mb-4">
-        {icon || <MailQuestion className="w-7 h-7 text-surface-400" />}
-      </div>
-      <h3 className="text-base font-bold text-surface-900 dark:text-surface-100 mb-1">
-        {title}
-      </h3>
-      <p className="text-sm text-surface-500 max-w-sm mb-6">{description}</p>
-      {action && <div>{action}</div>}
+    <div className="flex flex-col items-center justify-center py-12 px-4 text-center">
+      {icon && (
+        <div className="w-14 h-14 rounded-2xl bg-neutral-100 dark:bg-neutral-800/80 flex items-center justify-center text-neutral-400 dark:text-neutral-500 mb-4 border border-neutral-200 dark:border-neutral-700/60 shadow-sm">
+          {icon}
+        </div>
+      )}
+      <h3 className="text-base font-bold text-neutral-900 dark:text-neutral-100">{title}</h3>
+      <p className="mt-1.5 text-xs sm:text-sm text-neutral-500 dark:text-neutral-400 max-w-sm">
+        {description}
+      </p>
+      {actionLabel && onAction && (
+        <div className="mt-5">
+          <Button variant="primary" size="sm" onClick={onAction}>
+            {actionLabel}
+          </Button>
+        </div>
+      )}
     </div>
   );
 };
