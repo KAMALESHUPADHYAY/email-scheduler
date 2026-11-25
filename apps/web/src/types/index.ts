@@ -83,6 +83,7 @@ export interface CampaignItem {
   scheduled: number;
   failed: number;
   progress: number;
+  status?: 'scheduled' | 'active' | 'completed' | string;
 }
 
 export interface CampaignDetail extends CampaignItem {

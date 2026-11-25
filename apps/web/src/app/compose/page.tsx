@@ -221,9 +221,9 @@ export default function ComposePage() {
   };
 
   return (
-    <div className="min-h-screen bg-white flex flex-col font-sans select-none text-neutral-900">
+    <div className="min-h-screen bg-white dark:bg-neutral-900 flex flex-col font-sans select-none text-neutral-900 dark:text-neutral-100 transition-colors">
       {/* 1. Full-Page Top Header */}
-      <header className="h-14 border-b border-neutral-200 px-4 sm:px-6 flex items-center justify-between gap-3 shrink-0 bg-white">
+      <header className="h-14 border-b border-neutral-200 dark:border-neutral-800 px-4 sm:px-6 flex items-center justify-between gap-3 shrink-0 bg-white dark:bg-neutral-900">
         <div className="flex items-center gap-3">
           <IconButton
             aria-label="Back to dashboard"

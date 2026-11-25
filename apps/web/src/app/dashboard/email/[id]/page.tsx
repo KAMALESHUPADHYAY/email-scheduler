@@ -106,9 +106,9 @@ export default function EmailDetailPage() {
   }
 
   return (
-    <div className="w-full flex flex-col h-full bg-white select-none">
+    <div className="w-full flex flex-col h-full bg-white dark:bg-neutral-900 select-none">
       {/* 1. Email Header Bar */}
-      <div className="h-14 border-b border-neutral-200 px-4 flex items-center justify-between gap-3 shrink-0">
+      <div className="h-14 border-b border-neutral-200 dark:border-neutral-800 px-4 flex items-center justify-between gap-3 shrink-0">
         <div className="flex items-center gap-3 min-w-0 flex-1">
           <IconButton
             aria-label="Back to emails list"

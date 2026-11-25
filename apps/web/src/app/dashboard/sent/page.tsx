@@ -10,9 +10,11 @@ import { EmailListRow } from '../../../components/EmailListRow';
 import { Skeleton } from '../../../components/ui/Skeleton';
 import { EmptyState } from '../../../components/ui/EmptyState';
 
+import { SearchBar } from '../../../components/ui/SearchBar';
+
 export default function SentPage() {
   const router = useRouter();
-  const { searchQuery, refreshStats } = useDashboard();
+  const { searchQuery, setSearchQuery, refreshStats } = useDashboard();
   const [emails, setEmails] = useState<EmailItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [page, setPage] = useState(1);
@@ -64,6 +66,19 @@ export default function SentPage() {
 
   return (
     <div className="w-full flex flex-col min-h-full">
+      {/* Search Header */}
+      <div className="p-4 border-b border-neutral-100 dark:border-neutral-800 flex items-center justify-between gap-3 bg-neutral-50/50 dark:bg-neutral-900/50">
+        <div className="max-w-md flex-1">
+          <SearchBar
+            value={searchQuery}
+            onChange={setSearchQuery}
+            placeholder="Search sent emails by recipient or subject..."
+          />
+        </div>
+        <div className="text-xs text-neutral-400 font-mono">
+          {emails.length} delivered
+        </div>
+      </div>
       {isLoading ? (
         <div className="p-4 space-y-3">
           {[1, 2, 3, 4, 5, 6].map((i) => (

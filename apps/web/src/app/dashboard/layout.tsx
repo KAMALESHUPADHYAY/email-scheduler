@@ -1,8 +1,8 @@
 'use client';
 
 import React, { useState, useEffect, useCallback, createContext, useContext } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
-import { User, Sender, UserStats } from '../../types';
+import { useRouter } from 'next/navigation';
+import { User, Sender, UserStats, HealthResponse } from '../../types';
 import { api } from '../../lib/api';
 import { Sidebar } from '../../components/Sidebar';
 import { TopBar } from '../../components/TopBar';
@@ -11,6 +11,8 @@ interface DashboardContextType {
   user: User | null;
   sender: Sender | null;
   stats: UserStats | null;
+  health: HealthResponse | null;
+  campaignsCount: number;
   searchQuery: string;
   setSearchQuery: (q: string) => void;
   statusFilter: string;
@@ -23,6 +25,8 @@ const DashboardContext = createContext<DashboardContextType>({
   user: null,
   sender: null,
   stats: null,
+  health: null,
+  campaignsCount: 0,
   searchQuery: '',
   setSearchQuery: () => {},
   statusFilter: 'all',
@@ -38,6 +42,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [user, setUser] = useState<User | null>(null);
   const [sender, setSender] = useState<Sender | null>(null);
   const [stats, setStats] = useState<UserStats | null>(null);
+  const [health, setHealth] = useState<HealthResponse | null>(null);
+  const [campaignsCount, setCampaignsCount] = useState(0);
   const [searchQuery, setSearchQuery] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -67,14 +73,27 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
       });
   }, [router]);
 
-  // 2. Fetch live stats
+  // 2. Fetch live stats, health, and campaigns count
   const refreshStats = useCallback(async () => {
     try {
       setIsRefreshing(true);
-      const res = await api.getStats();
-      setStats(res.data);
+      const [statsRes, healthRes, campRes] = await Promise.allSettled([
+        api.getStats(),
+        api.getHealth(),
+        api.getCampaigns(),
+      ]);
+
+      if (statsRes.status === 'fulfilled') {
+        setStats(statsRes.value.data);
+      }
+      if (healthRes.status === 'fulfilled') {
+        setHealth(healthRes.value);
+      }
+      if (campRes.status === 'fulfilled') {
+        setCampaignsCount(campRes.value.data?.length || 0);
+      }
     } catch {
-      // Ignored
+      // Ignored for non-blocking telemetry
     } finally {
       setIsRefreshing(false);
     }
@@ -93,6 +112,8 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         user,
         sender,
         stats,
+        health,
+        campaignsCount,
         searchQuery,
         setSearchQuery,
         statusFilter,
@@ -101,13 +122,14 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         isRefreshing,
       }}
     >
-      <div className="flex h-screen bg-white overflow-hidden text-neutral-900 font-sans">
+      <div className="flex h-screen bg-neutral-50 dark:bg-neutral-950 overflow-hidden text-neutral-900 dark:text-neutral-100 font-sans transition-colors">
         {/* Left Sidebar */}
         <Sidebar
           user={user}
           sender={sender}
           scheduledCount={stats?.scheduledCount || 0}
           sentCount={stats?.sentCount || 0}
+          campaignsCount={campaignsCount}
           isOpenMobile={isMobileMenuOpen}
           onCloseMobile={() => setIsMobileMenuOpen(false)}
         />
@@ -115,16 +137,16 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
         {/* Main Content Area */}
         <div className="flex-1 flex flex-col min-w-0 h-full overflow-hidden">
           <TopBar
-            searchQuery={searchQuery}
-            onSearchChange={setSearchQuery}
+            user={user}
+            sender={sender}
+            onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
             onRefresh={refreshStats}
             isRefreshing={isRefreshing}
-            onOpenMobileMenu={() => setIsMobileMenuOpen(true)}
-            statusFilter={statusFilter}
-            onStatusFilterChange={setStatusFilter}
           />
 
-          <main className="flex-1 overflow-y-auto bg-white">{children}</main>
+          <main className="flex-1 overflow-y-auto">
+            {children}
+          </main>
         </div>
       </div>
     </DashboardContext.Provider>

@@ -43,10 +43,10 @@ export const EmailListRow: React.FC<EmailListRowProps> = ({
   return (
     <div
       onClick={() => router.push(`/dashboard/email/${email.id}`)}
-      className="flex items-center gap-3 px-4 py-2.5 border-b border-neutral-100 hover:bg-neutral-50/80 transition-colors cursor-pointer select-none group text-xs"
+      className="flex items-center gap-3 px-4 py-2.5 border-b border-neutral-100 dark:border-neutral-800 hover:bg-neutral-50/80 dark:hover:bg-neutral-850/60 transition-colors cursor-pointer select-none group text-xs"
     >
       {/* 1. Recipient fixed-width column */}
-      <div className="w-36 sm:w-48 shrink-0 font-medium text-neutral-800 truncate">
+      <div className="w-36 sm:w-48 shrink-0 font-medium text-neutral-800 dark:text-neutral-200 truncate">
         To: {email.recipient}
       </div>
 
@@ -69,11 +69,11 @@ export const EmailListRow: React.FC<EmailListRowProps> = ({
 
       {/* 3. Bold Subject & Muted Preview */}
       <div className="flex-1 min-w-0 truncate text-xs">
-        <span className="font-semibold text-neutral-900">
+        <span className="font-semibold text-neutral-900 dark:text-neutral-100">
           {email.subject}
           {isScheduled ? ' - Scheduled' : ''}
         </span>
-        <span className="text-neutral-500"> - {cleanPreview(email.body)}</span>
+        <span className="text-neutral-500 dark:text-neutral-400"> - {cleanPreview(email.body)}</span>
       </div>
 
       {/* 4. Sent Preview Link (Ethereal test mail) */}

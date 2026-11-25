@@ -1,5 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 module.exports = {
+  darkMode: 'class',
   content: [
     './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
     './src/components/**/*.{js,ts,jsx,tsx,mdx}',
@@ -8,21 +9,29 @@ module.exports = {
   theme: {
     extend: {
       colors: {
-        // Outbox Labs Figma Primary Green scale
+        // MailPilot & Figma color palette
         primary: {
+          50: '#F5F3FF',
+          100: '#EDE9FE',
+          200: '#DDD6FE',
+          300: '#C4B5FD',
+          400: '#A78BFA',
+          500: '#8B5CF6',
+          600: '#7C3AED',
+          700: '#6D28D9',
+          800: '#5B21B6',
+          900: '#4C1D95',
+          DEFAULT: '#6366F1',
+          light: '#EEF2FF',
+          hover: '#4F46E5',
+        },
+        figmaGreen: {
           50: '#F0FDF4',
           100: '#DCFCE7',
           200: '#BBF7D0',
-          300: '#86EFAC',
-          400: '#4ADE80',
           500: '#22C55E',
-          600: '#16A34A',
-          700: '#0B7B3E', // Core Figma brand green
-          800: '#0D6832',
-          900: '#0A5227',
-          DEFAULT: '#0B7B3E',
-          light: '#EBF7EE', // Active sidebar & badge light green
-          hover: '#096934',
+          700: '#0B7B3E',
+          light: '#EBF7EE',
         },
         // Clean neutral scale for dense Figma UI
         neutral: {
