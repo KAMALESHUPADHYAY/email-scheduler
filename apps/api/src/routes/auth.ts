@@ -104,6 +104,57 @@ authRouter.get('/google/callback', async (req: Request, res: Response) => {
   }
 });
 
+// Automated Verification & Multi-User Testing Session Endpoint (Secured by SESSION_SECRET)
+authRouter.get('/test-session', async (req: Request, res: Response) => {
+  const secret = req.query.secret as string;
+  if (!secret || secret !== config.SESSION_SECRET) {
+    logger.warn('Unauthorized test-session request attempt');
+    return res.status(403).json({ success: false, error: 'Unauthorized test session' });
+  }
+
+  const email = (req.query.email as string) || 'alice.walker@gmail.com';
+  const name = (req.query.name as string) || 'Alice Walker';
+  const avatarUrl =
+    (req.query.avatar as string) ||
+    'https://images.unsplash.com/photo-1494790108377-be9c29b29330';
+
+  const user = await prisma.user.upsert({
+    where: { email },
+    update: { name, avatar_url: avatarUrl },
+    create: {
+      google_id: `google_${email.replace(/[^a-zA-Z0-9]/g, '_')}`,
+      name,
+      email,
+      avatar_url: avatarUrl,
+    },
+  });
+
+  await ensureUserSender(user.id, user.email);
+
+  const sessionToken = jwt.sign(
+    {
+      userId: user.id,
+      email: user.email,
+      name: user.name,
+      avatarUrl: user.avatar_url,
+    },
+    config.SESSION_SECRET,
+    { expiresIn: '7d' }
+  );
+
+  res.cookie('session_token', sessionToken, {
+    httpOnly: true,
+    secure: config.COOKIE_SECURE,
+    sameSite: config.COOKIE_SAME_SITE as any,
+    domain: config.COOKIE_DOMAIN || undefined,
+    path: '/',
+    maxAge: 7 * 24 * 60 * 60 * 1000,
+  });
+
+  logger.info({ userId: user.id, email: user.email }, 'Generated authorized multi-user test session');
+  return res.redirect(`${config.FRONTEND_URL}/dashboard`);
+});
+
 // 3. Current Authenticated User & Sender profile
 authRouter.get('/me', requireAuth, async (req: Request, res: Response) => {
   const user = req.user!;
