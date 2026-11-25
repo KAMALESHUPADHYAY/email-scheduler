@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
@@ -14,6 +14,20 @@ export default function LoginPage() {
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const err = params.get('error');
+      if (err === 'google_not_configured') {
+        setError('Google OAuth is not configured on the server yet. Please log in or sign up with Email & Password below.');
+      } else if (err === 'google_auth_failed' || err === 'oauth_failed') {
+        setError('Google sign-in could not be completed. Please try again or use Email login.');
+      } else if (err === 'missing_code') {
+        setError('Google authorization was incomplete. Please try again.');
+      }
+    }
+  }, []);
 
   const handleGoogleLogin = () => {
     window.location.href = `${API_BASE_URL}/auth/google`;

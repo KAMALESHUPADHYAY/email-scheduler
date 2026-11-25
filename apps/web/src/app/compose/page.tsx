@@ -183,6 +183,43 @@ export default function ComposePage() {
     }
   };
 
+  // Submit Immediate Send Request
+  const handleSendNow = async () => {
+    setErrorMessage(null);
+
+    if (recipients.length === 0) {
+      setErrorMessage('Please add at least one recipient email.');
+      return;
+    }
+    if (!subject.trim()) {
+      setErrorMessage('Subject is required.');
+      return;
+    }
+    if (!bodyHtml.trim()) {
+      setErrorMessage('Email body cannot be empty.');
+      return;
+    }
+
+    setIsSubmitting(true);
+    try {
+      const formData = new FormData();
+      formData.append('subject', subject.trim());
+      formData.append('body', bodyHtml);
+      formData.append('recipients', JSON.stringify(recipients));
+      // Immediate start time: first email scheduled immediately, others staggered
+      formData.append('start_time', new Date().toISOString());
+      formData.append('delay_seconds', String(delaySeconds || 2));
+      formData.append('hourly_limit', String(hourlyLimit || 20));
+
+      await api.createCampaign(formData);
+      router.push('/dashboard/scheduled');
+    } catch (err: any) {
+      setErrorMessage(err.message || 'Failed to send campaign. Please try again.');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
   return (
     <div className="min-h-screen bg-white flex flex-col font-sans select-none text-neutral-900">
       {/* 1. Full-Page Top Header */}
@@ -273,6 +310,17 @@ export default function ComposePage() {
             className="px-4 py-1 font-semibold text-xs border-primary-700 text-primary-700 hover:bg-primary-light"
           >
             Send Later
+          </Button>
+
+          {/* Send Now Button (Figma Solid Green Pill) */}
+          <Button
+            variant="solid"
+            size="sm"
+            onClick={handleSendNow}
+            isLoading={isSubmitting}
+            className="px-4 py-1 font-semibold text-xs rounded-pill"
+          >
+            Send now
           </Button>
         </div>
       </header>

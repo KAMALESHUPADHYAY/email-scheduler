@@ -43,8 +43,19 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
-  // 1. Initial auth check
+  // 1. Initial auth check & session token capture from OAuth callback
   useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const sessionFromUrl = params.get('session');
+      if (sessionFromUrl) {
+        localStorage.setItem('session_token', sessionFromUrl);
+        document.cookie = `session_token=${sessionFromUrl}; path=/; max-age=604800; SameSite=Lax; Secure`;
+        const newUrl = window.location.pathname;
+        window.history.replaceState({}, '', newUrl);
+      }
+    }
+
     api
       .getMe()
       .then((res) => {

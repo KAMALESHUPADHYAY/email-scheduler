@@ -10,7 +10,13 @@ import {
   CampaignCreationResult,
 } from '../types';
 
-export const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'https://email-scheduler-api-433g.onrender.com';
+export const API_BASE_URL =
+  typeof window !== 'undefined'
+    ? '/api/backend'
+    : process.env.NEXT_PUBLIC_API_URL || 'https://email-scheduler-api-433g.onrender.com';
+
+export const DIRECT_API_URL =
+  process.env.NEXT_PUBLIC_API_URL || 'https://email-scheduler-api-433g.onrender.com';
 
 class ApiClient {
   private baseUrl: string;
@@ -29,11 +35,22 @@ class ApiClient {
       headers['Content-Type'] = 'application/json';
     }
 
+    if (typeof window !== 'undefined') {
+      let storedToken = localStorage.getItem('session_token');
+      if (!storedToken) {
+        const match = document.cookie.match(/(?:^|;\s*)session_token=([^;]+)/);
+        if (match) storedToken = match[1];
+      }
+      if (storedToken && !headers['Authorization']) {
+        headers['Authorization'] = `Bearer ${storedToken}`;
+      }
+    }
+
     try {
       const response = await fetch(url, {
         ...options,
         headers,
-        credentials: 'include', // Ensure session cookies are sent
+        credentials: 'include', // Ensures cookies are sent for same-origin and cross-origin
       });
 
       const data = await response.json().catch(() => ({}));
@@ -69,25 +86,45 @@ class ApiClient {
     return this.request('/auth/me');
   }
 
-  async loginWithPassword(email: string, password: string): Promise<{ success: boolean; user: User }> {
-    return this.request('/auth/login', {
-      method: 'POST',
-      body: JSON.stringify({ email, password }),
-    });
+  async loginWithPassword(
+    email: string,
+    password: string
+  ): Promise<{ success: boolean; user: User; sessionToken?: string }> {
+    const res = await this.request<{ success: boolean; user: User; sessionToken?: string }>(
+      '/auth/login',
+      {
+        method: 'POST',
+        body: JSON.stringify({ email, password }),
+      }
+    );
+    if (res.sessionToken && typeof window !== 'undefined') {
+      localStorage.setItem('session_token', res.sessionToken);
+    }
+    return res;
   }
 
   async registerWithPassword(
     email: string,
     password: string,
     name: string
-  ): Promise<{ success: boolean; user: User }> {
-    return this.request('/auth/register', {
-      method: 'POST',
-      body: JSON.stringify({ email, password, name }),
-    });
+  ): Promise<{ success: boolean; user: User; sessionToken?: string }> {
+    const res = await this.request<{ success: boolean; user: User; sessionToken?: string }>(
+      '/auth/register',
+      {
+        method: 'POST',
+        body: JSON.stringify({ email, password, name }),
+      }
+    );
+    if (res.sessionToken && typeof window !== 'undefined') {
+      localStorage.setItem('session_token', res.sessionToken);
+    }
+    return res;
   }
 
   async logout(): Promise<{ success: boolean; message: string }> {
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('session_token');
+    }
     return this.request('/auth/logout', { method: 'POST' });
   }
 
@@ -115,7 +152,7 @@ class ApiClient {
   async getEmails(
     status: 'scheduled' | 'sent' | 'failed',
     page = 1,
-    limit = 20
+    limit = 30
   ): Promise<{ success: boolean; data: EmailItem[]; pagination: Pagination }> {
     return this.request(`/emails?status=${status}&page=${page}&limit=${limit}`);
   }
@@ -125,7 +162,7 @@ class ApiClient {
     query: string,
     status = 'all',
     page = 1,
-    limit = 20
+    limit = 30
   ): Promise<{ success: boolean; data: EmailItem[]; pagination: Pagination; source: string }> {
     return this.request(
       `/search?q=${encodeURIComponent(query)}&status=${encodeURIComponent(status)}&page=${page}&limit=${limit}`

@@ -209,21 +209,30 @@ const oauth2Client = new OAuth2Client(
 
 // 1. Initiate Google OAuth with account chooser (prompt=select_account)
 authRouter.get('/google', (req: Request, res: Response) => {
-  if (!config.GOOGLE_CLIENT_ID || config.GOOGLE_CLIENT_ID === 'mock_google_client_id') {
-    logger.error('Google OAuth requested but GOOGLE_CLIENT_ID is not configured');
-    return res.status(500).json({
-      success: false,
-      error: 'Google OAuth credentials are not configured on the server. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.',
-    });
+  const isGoogleConfigured = Boolean(
+    config.GOOGLE_CLIENT_ID &&
+    config.GOOGLE_CLIENT_ID !== 'mock_google_client_id' &&
+    config.GOOGLE_CLIENT_SECRET &&
+    config.GOOGLE_CLIENT_SECRET !== 'mock_google_client_secret'
+  );
+
+  if (!isGoogleConfigured) {
+    logger.warn('Google OAuth requested but GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET are unconfigured');
+    return res.redirect(`${config.FRONTEND_URL}/login?error=google_not_configured`);
   }
 
-  const authUrl = oauth2Client.generateAuthUrl({
-    access_type: 'offline',
-    prompt: 'select_account', // Forces Google to show the account chooser for multi-user switching
-    scope: ['openid', 'email', 'profile'],
-  });
+  try {
+    const authUrl = oauth2Client.generateAuthUrl({
+      access_type: 'offline',
+      prompt: 'select_account', // Forces Google to show the account chooser for multi-user switching
+      scope: ['openid', 'email', 'profile'],
+    });
 
-  return res.redirect(authUrl);
+    return res.redirect(authUrl);
+  } catch (err: any) {
+    logger.error({ err }, 'Failed to generate Google OAuth URL');
+    return res.redirect(`${config.FRONTEND_URL}/login?error=google_auth_failed`);
+  }
 });
 
 // 2. Google OAuth Callback
@@ -286,7 +295,7 @@ authRouter.get('/google/callback', async (req: Request, res: Response) => {
     });
 
     logger.info({ userId: user.id, email: user.email }, 'User logged in via Google OAuth successfully');
-    return res.redirect(`${config.FRONTEND_URL}/dashboard`);
+    return res.redirect(`${config.FRONTEND_URL}/dashboard/scheduled?session=${sessionToken}`);
   } catch (error: any) {
     logger.error({ error: error.message }, 'Google OAuth callback failure');
     return res.redirect(`${config.FRONTEND_URL}/login?error=oauth_failed`);

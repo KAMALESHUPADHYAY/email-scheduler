@@ -66,7 +66,30 @@ const authLimiter = rateLimit({
   message: { success: false, error: 'Too many authentication attempts. Please try again later.' },
 });
 
-// Health check endpoint (checks DB, Redis, and Worker Heartbeat)
+// Startup Environment Variables Validation
+const requiredEnv = [
+  'GOOGLE_CLIENT_ID',
+  'GOOGLE_CLIENT_SECRET',
+  'SESSION_SECRET',
+  'DATABASE_URL',
+  'REDIS_URL',
+  'FRONTEND_URL',
+  'API_PUBLIC_URL',
+];
+const missingEnv = requiredEnv.filter((k) => {
+  const val = process.env[k];
+  return !val || val === `mock_${k.toLowerCase()}`;
+});
+if (missingEnv.length > 0) {
+  logger.warn(
+    { missing: missingEnv },
+    '⚠️ Some environment variables are unconfigured or using defaults: ' + missingEnv.join(', ')
+  );
+} else {
+  logger.info('✅ All required environment variables are configured.');
+}
+
+// Health check endpoint (checks DB, Redis, Worker Heartbeat, and Config Booleans)
 app.get('/health', async (req, res) => {
   const dbOk = await checkDatabaseConnection();
   let redisOk = false;
@@ -92,6 +115,16 @@ app.get('/health', async (req, res) => {
     workerStatus = 'unreachable';
   }
 
+  const isGoogleConfigured = Boolean(
+    config.GOOGLE_CLIENT_ID &&
+    config.GOOGLE_CLIENT_ID !== 'mock_google_client_id' &&
+    config.GOOGLE_CLIENT_SECRET &&
+    config.GOOGLE_CLIENT_SECRET !== 'mock_google_client_secret'
+  );
+  const isSlackConfigured = Boolean(
+    config.SLACK_CLIENT_ID && config.SLACK_CLIENT_SECRET
+  );
+
   const isHealthy = dbOk && redisOk && workerStatus === 'online';
 
   res.status(isHealthy ? 200 : (dbOk && redisOk ? 200 : 503)).json({
@@ -102,6 +135,8 @@ app.get('/health', async (req, res) => {
       redis: redisOk ? 'healthy' : 'unhealthy',
       worker: workerStatus,
     },
+    googleConfigured: isGoogleConfigured,
+    slackConfigured: isSlackConfigured,
     workerHeartbeat: lastHeartbeat,
     heartbeatAgeSeconds,
   });
