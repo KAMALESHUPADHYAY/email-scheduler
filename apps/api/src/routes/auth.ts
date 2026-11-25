@@ -224,10 +224,17 @@ authRouter.get('/google', (req: Request, res: Response) => {
   }
 
   try {
+    const host = req.get('x-forwarded-host') || req.get('host') || '';
+    let redirectUri = config.GOOGLE_REDIRECT_URI;
+    if (host.includes('vercel.app')) {
+      redirectUri = `https://${host}/api/auth/google/callback`;
+    }
+
     const authUrl = oauth2Client.generateAuthUrl({
       access_type: 'offline',
       prompt: 'select_account', // Forces Google to show the account chooser for multi-user switching
       scope: ['openid', 'email', 'profile'],
+      redirect_uri: redirectUri,
     });
 
     return res.redirect(authUrl);
@@ -239,6 +246,15 @@ authRouter.get('/google', (req: Request, res: Response) => {
 
 // 2. Google OAuth Callback
 authRouter.get('/google/callback', async (req: Request, res: Response) => {
+  if (req.query.error) {
+    const googleErr = String(req.query.error);
+    logger.warn({ error: googleErr }, 'Google OAuth returned error in query');
+    if (googleErr === 'access_denied') {
+      return res.redirect(`${config.FRONTEND_URL}/login?error=access_denied`);
+    }
+    return res.redirect(`${config.FRONTEND_URL}/login?error=${encodeURIComponent(googleErr)}`);
+  }
+
   const code = req.query.code as string;
   if (!code) {
     logger.warn('Google OAuth callback called without authorization code');
@@ -246,7 +262,13 @@ authRouter.get('/google/callback', async (req: Request, res: Response) => {
   }
 
   try {
-    const { tokens } = await oauth2Client.getToken(code);
+    const host = req.get('x-forwarded-host') || req.get('host') || '';
+    let redirectUri = config.GOOGLE_REDIRECT_URI;
+    if (host.includes('vercel.app')) {
+      redirectUri = `https://${host}/api/auth/google/callback`;
+    }
+
+    const { tokens } = await oauth2Client.getToken({ code, redirect_uri: redirectUri });
     if (!tokens.id_token) {
       throw new Error('Google did not return an id_token');
     }
@@ -297,9 +319,16 @@ authRouter.get('/google/callback', async (req: Request, res: Response) => {
     });
 
     logger.info({ userId: user.id, email: user.email }, 'User logged in via Google OAuth successfully');
-    return res.redirect(`${config.FRONTEND_URL}/dashboard/scheduled?session=${sessionToken}`);
+    return res.redirect(`${config.FRONTEND_URL}/dashboard?session=${sessionToken}`);
   } catch (error: any) {
     logger.error({ error: error.message }, 'Google OAuth callback failure');
+    const msg = error.message || '';
+    if (msg.includes('invalid_grant')) {
+      return res.redirect(`${config.FRONTEND_URL}/login?error=invalid_grant`);
+    }
+    if (msg.includes('access_denied') || msg.includes('403')) {
+      return res.redirect(`${config.FRONTEND_URL}/login?error=access_denied`);
+    }
     return res.redirect(`${config.FRONTEND_URL}/login?error=oauth_failed`);
   }
 });

@@ -12,7 +12,7 @@ import {
 
 export const API_BASE_URL =
   typeof window !== 'undefined'
-    ? '/api/backend'
+    ? '/api'
     : process.env.NEXT_PUBLIC_API_URL || 'https://email-scheduler-api-433g.onrender.com';
 
 export const DIRECT_API_URL =

@@ -20,11 +20,19 @@ export default function LoginPage() {
       const params = new URLSearchParams(window.location.search);
       const err = params.get('error');
       if (err === 'google_not_configured') {
-        setError('Google OAuth is not configured on the server yet. Please log in or sign up with Email & Password below.');
+        setError('Google OAuth is not configured on the server yet. Please configure GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET on Render.');
+      } else if (err === 'access_denied') {
+        setError('Google sign-in was canceled or access was denied. If your Google Cloud app is in "Testing" mode, add your Google account to Test Users.');
+      } else if (err === 'invalid_grant') {
+        setError('Google authorization code has expired or was already used. Please try logging in again.');
       } else if (err === 'google_auth_failed' || err === 'oauth_failed') {
-        setError('Google sign-in could not be completed. Please try again or use Email login.');
+        setError('Google sign-in could not be completed. Please check Google Cloud Console credentials and redirect URIs.');
       } else if (err === 'missing_code') {
         setError('Google authorization was incomplete. Please try again.');
+      } else if (err === 'session_expired') {
+        setError('Your session has expired. Please log in again.');
+      } else if (err) {
+        setError(`Authentication error (${err}). Please try again.`);
       }
     }
   }, []);

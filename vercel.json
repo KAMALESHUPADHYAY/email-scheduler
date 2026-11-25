@@ -1,5 +1,11 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
   "framework": "nextjs",
-  "rootDirectory": "apps/web"
+  "rootDirectory": "apps/web",
+  "rewrites": [
+    {
+      "source": "/api/:match*",
+      "destination": "https://email-scheduler-api-433g.onrender.com/:match*"
+    }
+  ]
 }

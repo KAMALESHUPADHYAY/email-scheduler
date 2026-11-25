@@ -46,7 +46,12 @@ const configSchema = z.object({
   GOOGLE_CLIENT_SECRET: z.string().default(process.env.GOOGLE_CLIENT_SECRET || 'mock_google_client_secret'),
   GOOGLE_REDIRECT_URI: z
     .string()
-    .default(process.env.GOOGLE_REDIRECT_URI || `${rawApiPublicUrl}/auth/google/callback`),
+    .default(
+      process.env.GOOGLE_REDIRECT_URI ||
+        (process.env.FRONTEND_URL
+          ? `${process.env.FRONTEND_URL}/api/auth/google/callback`
+          : `${rawApiPublicUrl}/auth/google/callback`)
+    ),
 
   // Slack OAuth (URLs built from API_PUBLIC_URL)
   SLACK_CLIENT_ID: z.string().optional(),

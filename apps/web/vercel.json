@@ -1,0 +1,8 @@
+{
+  "rewrites": [
+    {
+      "source": "/api/:match*",
+      "destination": "https://email-scheduler-api-433g.onrender.com/:match*"
+    }
+  ]
+}
