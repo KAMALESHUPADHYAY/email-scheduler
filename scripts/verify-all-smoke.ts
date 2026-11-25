@@ -28,7 +28,7 @@ async function main() {
   try {
     const loginRes = await axios.get(`${API_BASE}/auth/dev-login`, {
       params: {
-        email: 'interviewer.final@reachinbox.test',
+        email: 'interviewer.final@mailpilot.test',
         name: 'Placement Interviewer',
         json: 'true',
       },

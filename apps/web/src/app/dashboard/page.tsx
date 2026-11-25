@@ -34,6 +34,7 @@ import {
 } from 'lucide-react';
 import {
   User,
+  UserStats,
   Sender,
   EmailItem,
   CampaignItem,
@@ -59,12 +60,14 @@ export default function DashboardPage() {
   // User & System State
   const [user, setUser] = useState<User | null>(null);
   const [sender, setSender] = useState<Sender | null>(null);
+  const [stats, setStats] = useState<UserStats | null>(null);
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [avatarFailed, setAvatarFailed] = useState(false);
   const [health, setHealth] = useState<HealthResponse | null>(null);
   const [activeTab, setActiveTab] = useState<NavTab>('overview');
 
   // Emails Table State
   const [emails, setEmails] = useState<EmailItem[]>([]);
-  const [allEmailsCache, setAllEmailsCache] = useState<EmailItem[]>([]);
   const [totalCount, setTotalCount] = useState(0);
   const [totalPages, setTotalPages] = useState(1);
   const [page, setPage] = useState(1);
@@ -99,6 +102,7 @@ export default function DashboardPage() {
 
   // Load User & Sender profile
   useEffect(() => {
+    setIsAuthLoading(true);
     api
       .getMe()
       .then((res) => {
@@ -107,8 +111,21 @@ export default function DashboardPage() {
       })
       .catch(() => {
         router.push('/login');
+      })
+      .finally(() => {
+        setIsAuthLoading(false);
       });
   }, [router]);
+
+  // Fetch Stats for logged-in user only
+  const fetchStats = useCallback(async () => {
+    try {
+      const res = await api.getStats();
+      setStats(res.data);
+    } catch {
+      // Ignored
+    }
+  }, []);
 
   // Poll Health endpoint every 15s
   useEffect(() => {
@@ -167,39 +184,26 @@ export default function DashboardPage() {
     }
   }, []);
 
-  // Fetch All Emails for Overview Stats
-  const fetchOverviewData = useCallback(async () => {
-    try {
-      const [schedRes, sentRes] = await Promise.all([
-        api.getEmails('scheduled', 1, 100),
-        api.getEmails('sent', 1, 100),
-      ]);
-      setAllEmailsCache([...schedRes.data, ...sentRes.data]);
-    } catch {
-      // Ignored
-    }
-  }, []);
-
   // Primary Data Loading effect
   useEffect(() => {
     if (!user) return;
 
     if (activeTab === 'overview') {
-      fetchOverviewData();
+      fetchStats();
       fetchCampaigns(true);
     } else if (activeTab === 'campaigns') {
       fetchCampaigns();
     } else if (activeTab === 'scheduled' || activeTab === 'sent') {
       fetchEmails();
     }
-  }, [user, activeTab, fetchEmails, fetchCampaigns, fetchOverviewData]);
+  }, [user, activeTab, fetchEmails, fetchCampaigns, fetchStats]);
 
   // Silent Auto-refresh every 10 seconds without UI flicker
   useEffect(() => {
     if (!user) return;
     const interval = setInterval(() => {
       if (activeTab === 'overview') {
-        fetchOverviewData();
+        fetchStats();
         fetchCampaigns(true);
       } else if (activeTab === 'campaigns') {
         fetchCampaigns(true);
@@ -208,7 +212,7 @@ export default function DashboardPage() {
       }
     }, 10000);
     return () => clearInterval(interval);
-  }, [user, activeTab, fetchEmails, fetchCampaigns, fetchOverviewData]);
+  }, [user, activeTab, fetchEmails, fetchCampaigns, fetchStats]);
 
   // Fetch Campaign Detail when ID is selected
   useEffect(() => {
@@ -244,51 +248,28 @@ export default function DashboardPage() {
     );
   };
 
-  // Overview Statistics Calculations
-  const overviewStats = useMemo(() => {
-    const scheduled = allEmailsCache.filter((e) => e.status === 'scheduled');
-    const sent = allEmailsCache.filter((e) => e.status === 'sent');
-    const failed = allEmailsCache.filter((e) => e.status === 'failed');
-
-    // Find next send time
-    const sortedScheduled = [...scheduled].sort(
-      (a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime()
-    );
-    const nextSend = sortedScheduled.length > 0 ? sortedScheduled[0].scheduled_at : null;
-
-    // Sent in the last hour
-    const oneHourAgo = Date.now() - 60 * 60 * 1000;
-    const sentThisHour = sent.filter((e) => e.sent_at && new Date(e.sent_at).getTime() > oneHourAgo).length;
-
-    // Hourly distribution for pure SVG chart
-    const hoursMap: { [hour: string]: number } = {};
-    for (let i = 11; i >= 0; i--) {
-      const d = new Date(Date.now() - i * 3600 * 1000);
-      const label = d.getHours() + ':00';
-      hoursMap[label] = 0;
+  // Convert chartPoints timestamps from UTC into user's local timezone labels
+  const localChartPoints = useMemo(() => {
+    if (!stats?.chartPoints || stats.chartPoints.length === 0) {
+      const fallback: { label: string; count: number }[] = [];
+      for (let i = 11; i >= 0; i--) {
+        const d = new Date(Date.now() - i * 3600 * 1000);
+        fallback.push({
+          label: d.toLocaleTimeString([], { hour: 'numeric' }),
+          count: 0,
+        });
+      }
+      return fallback;
     }
 
-    sent.forEach((e) => {
-      if (e.sent_at) {
-        const d = new Date(e.sent_at);
-        const label = d.getHours() + ':00';
-        if (hoursMap[label] !== undefined) {
-          hoursMap[label]++;
-        }
-      }
+    return stats.chartPoints.map((p) => {
+      const d = new Date(p.timestamp);
+      return {
+        label: d.toLocaleTimeString([], { hour: 'numeric' }),
+        count: p.count,
+      };
     });
-
-    const chartPoints = Object.entries(hoursMap).map(([hour, count]) => ({ hour, count }));
-
-    return {
-      scheduledCount: scheduled.length,
-      sentCount: sent.length,
-      failedCount: failed.length,
-      nextSendTime: nextSend,
-      sentThisHour,
-      chartPoints,
-    };
-  }, [allEmailsCache]);
+  }, [stats?.chartPoints]);
 
   // Filtered & Sorted Emails
   const displayEmails = useMemo(() => {
@@ -428,9 +409,9 @@ export default function DashboardPage() {
                 <Clock className="w-4 h-4 text-primary-500" />
                 <span>Scheduled Queue</span>
               </div>
-              {overviewStats.scheduledCount > 0 && (
+              {stats && stats.scheduledCount > 0 && (
                 <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-primary-100 dark:bg-primary-950 text-primary-700 dark:text-primary-300">
-                  {overviewStats.scheduledCount}
+                  {stats.scheduledCount}
                 </span>
               )}
             </button>
@@ -448,9 +429,9 @@ export default function DashboardPage() {
                 <CheckCheck className="w-4 h-4 text-emerald-500" />
                 <span>Sent History</span>
               </div>
-              {overviewStats.sentCount > 0 && (
+              {stats && stats.sentCount > 0 && (
                 <span className="text-[10px] font-bold px-1.5 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950 text-emerald-700 dark:text-emerald-300">
-                  {overviewStats.sentCount}
+                  {stats.sentCount}
                 </span>
               )}
             </button>
@@ -589,22 +570,29 @@ export default function DashboardPage() {
 
             {/* User Profile & Logout */}
             <div className="flex items-center gap-2 pl-3 border-l border-neutral-200 dark:border-neutral-800">
-              {user.avatar_url ? (
+              {(user.avatarUrl || user.avatar_url) && !avatarFailed ? (
                 <img
-                  src={user.avatar_url}
+                  src={(user.avatarUrl || user.avatar_url)!}
                   alt={user.name}
+                  onError={() => setAvatarFailed(true)}
                   className="w-8 h-8 rounded-full border border-neutral-200 dark:border-neutral-700 object-cover"
                 />
               ) : (
-                <div className="w-8 h-8 rounded-full bg-primary-100 dark:bg-primary-950 text-primary-700 dark:text-primary-300 font-bold text-xs flex items-center justify-center">
-                  {user.name.charAt(0).toUpperCase()}
+                <div className="w-8 h-8 rounded-full bg-primary-100 dark:bg-primary-950 text-primary-700 dark:text-primary-300 font-bold text-xs flex items-center justify-center border border-primary-200 dark:border-primary-800">
+                  {(user.name || user.email || 'U')
+                    .split(' ')
+                    .map((p) => p[0])
+                    .filter(Boolean)
+                    .slice(0, 2)
+                    .join('')
+                    .toUpperCase()}
                 </div>
               )}
               <div className="hidden lg:block text-left text-xs leading-tight">
-                <div className="font-bold text-neutral-800 dark:text-neutral-200 truncate max-w-[120px]">
+                <div className="font-bold text-neutral-800 dark:text-neutral-200 truncate max-w-[140px]">
                   {user.name}
                 </div>
-                <div className="text-[10px] text-neutral-400 truncate max-w-[120px]">
+                <div className="text-[10px] text-neutral-400 truncate max-w-[140px]">
                   {user.email}
                 </div>
               </div>
@@ -613,6 +601,7 @@ export default function DashboardPage() {
                 type="button"
                 onClick={handleLogout}
                 aria-label="Logout"
+                title="Sign out of account"
                 className="p-1.5 rounded-lg text-neutral-400 hover:text-danger-600 hover:bg-danger-50 dark:hover:bg-danger-950/40 transition-colors ml-1"
               >
                 <LogOut className="w-4 h-4" />
@@ -659,7 +648,7 @@ export default function DashboardPage() {
                   </CardHeader>
                   <CardContent>
                     <div className="text-3xl font-black text-neutral-900 dark:text-white">
-                      {overviewStats.scheduledCount}
+                      {stats?.scheduledCount ?? 0}
                     </div>
                     <p className="text-xs text-neutral-500 mt-1">
                       BullMQ delayed jobs awaiting dispatch
@@ -676,7 +665,7 @@ export default function DashboardPage() {
                   </CardHeader>
                   <CardContent>
                     <div className="text-3xl font-black text-emerald-600 dark:text-emerald-400">
-                      {overviewStats.sentCount}
+                      {stats?.sentCount ?? 0}
                     </div>
                     <p className="text-xs text-neutral-500 mt-1">
                       Delivered with Ethereal SMTP telemetry
@@ -693,10 +682,10 @@ export default function DashboardPage() {
                   </CardHeader>
                   <CardContent>
                     <div className="text-3xl font-black text-neutral-900 dark:text-white">
-                      {overviewStats.failedCount}
+                      {stats?.failedCount ?? 0}
                     </div>
                     <p className="text-xs text-neutral-500 mt-1">
-                      {overviewStats.failedCount === 0 ? 'Zero delivery dropouts' : 'Requires inspection'}
+                      {(stats?.failedCount ?? 0) === 0 ? 'Zero delivery dropouts' : 'Requires inspection'}
                     </p>
                   </CardContent>
                 </Card>
@@ -710,8 +699,8 @@ export default function DashboardPage() {
                   </CardHeader>
                   <CardContent>
                     <div className="text-base sm:text-lg font-bold text-neutral-900 dark:text-white truncate">
-                      {overviewStats.nextSendTime
-                        ? new Date(overviewStats.nextSendTime).toLocaleTimeString([], {
+                      {stats?.nextSendTime
+                        ? new Date(stats.nextSendTime).toLocaleTimeString([], {
                             hour: '2-digit',
                             minute: '2-digit',
                             second: '2-digit',
@@ -719,8 +708,8 @@ export default function DashboardPage() {
                         : 'Queue Idle'}
                     </div>
                     <p className="text-xs text-neutral-500 mt-1 truncate">
-                      {overviewStats.nextSendTime
-                        ? new Date(overviewStats.nextSendTime).toLocaleDateString()
+                      {stats?.nextSendTime
+                        ? new Date(stats.nextSendTime).toLocaleDateString()
                         : 'No pending items'}
                     </p>
                   </CardContent>
@@ -746,11 +735,11 @@ export default function DashboardPage() {
                   <CardContent className="space-y-4">
                     <div className="space-y-1.5">
                       <div className="flex items-center justify-between text-xs font-bold">
-                        <span className="text-neutral-600 dark:text-neutral-400">
-                          {sender ? sender.email : user.email}
+                        <span className="text-neutral-600 dark:text-neutral-400 truncate max-w-[180px]">
+                          {stats?.senderEmail || sender?.email || user.email}
                         </span>
                         <span className="text-primary-600 dark:text-primary-400">
-                          {overviewStats.sentThisHour} / {sender?.hourly_limit || 50} this hour
+                          {stats?.usedThisHour ?? 0} / {stats?.hourlyLimit || sender?.hourly_limit || 50} this hour
                         </span>
                       </div>
 
@@ -762,7 +751,7 @@ export default function DashboardPage() {
                             width: `${Math.min(
                               100,
                               Math.round(
-                                (overviewStats.sentThisHour / (sender?.hourly_limit || 50)) * 100
+                                ((stats?.usedThisHour ?? 0) / (stats?.hourlyLimit || sender?.hourly_limit || 50)) * 100
                               )
                             )}%`,
                           }}
@@ -778,13 +767,13 @@ export default function DashboardPage() {
                   </CardContent>
                 </Card>
 
-                {/* Pure Lightweight Responsive SVG Chart */}
+                {/* Pure Lightweight Responsive SVG Chart (Local Timezone X-Axis) */}
                 <Card className="lg:col-span-2">
                   <CardHeader className="flex flex-row items-center justify-between">
                     <div>
                       <CardTitle className="text-sm">Emails Sent per Hour</CardTitle>
                       <CardDescription>
-                        Delivery velocity distribution across the last 12 hours
+                        Delivery velocity distribution across the last 12 hours (local time)
                       </CardDescription>
                     </div>
                     <Badge variant="sent" size="sm">
@@ -808,7 +797,7 @@ export default function DashboardPage() {
 
                         {/* Chart Area Fill and Stroke */}
                         {(() => {
-                          const points = overviewStats.chartPoints;
+                          const points = localChartPoints;
                           const max = Math.max(...points.map((p) => p.count), 5);
                           const stepX = 600 / (points.length - 1 || 1);
 
@@ -816,7 +805,7 @@ export default function DashboardPage() {
                             x: idx * stepX,
                             y: 140 - (p.count / max) * 110,
                             count: p.count,
-                            hour: p.hour,
+                            label: p.label,
                           }));
 
                           const pathD = coords.reduce(
@@ -853,11 +842,11 @@ export default function DashboardPage() {
                         })()}
                       </svg>
 
-                      {/* X-Axis Hour Labels */}
+                      {/* X-Axis Hour Labels in User's Local Time */}
                       <div className="flex justify-between pt-2 text-[10px] text-neutral-400 font-mono border-t border-neutral-200 dark:border-neutral-800">
-                        {overviewStats.chartPoints.map((p, i) => (
+                        {localChartPoints.map((p, i) => (
                           <span key={i} className={i % 2 === 0 ? 'inline' : 'hidden sm:inline'}>
-                            {p.hour}
+                            {p.label}
                           </span>
                         ))}
                       </div>
@@ -1697,7 +1686,7 @@ export default function DashboardPage() {
         onSuccess={() => {
           fetchEmails();
           fetchCampaigns();
-          fetchOverviewData();
+          fetchStats();
         }}
       />
     </div>

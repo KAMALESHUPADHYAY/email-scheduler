@@ -56,7 +56,7 @@ async function runRestartSafetyVerification() {
     const records = [1, 2, 3, 4, 5].map((num) => ({
       campaign_id: c.id,
       sender_id: sender.id,
-      recipient: `crash.test.${num}.${Date.now()}@test.reachinbox.com`,
+      recipient: `crash.test.${num}.${Date.now()}@test.mailpilot.com`,
       subject: `Crash Test Email #${num}`,
       body: `Testing idempotency and crash recovery for email ${num}`,
       scheduled_at: new Date(startTime.getTime() + num * delaySec * 1000),

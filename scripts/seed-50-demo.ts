@@ -18,14 +18,14 @@ import {
 async function seedDemoCampaign() {
   console.log('🚀 Running 50-Recipient Demo Seed Script...');
 
-  // 1. Find or create demo user
+  // 1. Find or create test user
   const user = await prisma.user.upsert({
-    where: { email: 'demo.recruiter@reachinbox.test' },
+    where: { email: 'demo.recruiter@mailpilot.test' },
     update: {},
     create: {
       google_id: 'google_demo_recruiter_123',
       name: 'Placement Interviewer',
-      email: 'demo.recruiter@reachinbox.test',
+      email: 'demo.recruiter@mailpilot.test',
       avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100',
     },
   });

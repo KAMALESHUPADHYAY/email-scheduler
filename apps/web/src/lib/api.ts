@@ -1,5 +1,6 @@
 import {
   User,
+  UserStats,
   Sender,
   EmailItem,
   Pagination,
@@ -75,6 +76,11 @@ class ApiClient {
   // System Health
   async getHealth(): Promise<HealthResponse> {
     return this.request('/health');
+  }
+
+  // Per-user Stats
+  async getStats(): Promise<{ success: boolean; data: UserStats }> {
+    return this.request('/stats');
   }
 
   // Emails list

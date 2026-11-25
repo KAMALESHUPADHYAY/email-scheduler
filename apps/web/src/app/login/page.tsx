@@ -2,8 +2,7 @@
 
 import React from 'react';
 import Link from 'next/link';
-import { Send, ArrowLeft, ArrowRight, Zap, Database, ShieldCheck } from 'lucide-react';
-import { Button } from '../../components/ui/Button';
+import { Send, ArrowLeft, Zap, Database, ShieldCheck } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '../../components/ui/Card';
 import { ThemeToggle } from '../../components/ui/ThemeToggle';
 import { API_BASE_URL } from '../../lib/api';
@@ -11,10 +10,6 @@ import { API_BASE_URL } from '../../lib/api';
 export default function LoginPage() {
   const handleGoogleLogin = () => {
     window.location.href = `${API_BASE_URL}/auth/google`;
-  };
-
-  const handleDevLogin = () => {
-    window.location.href = `${API_BASE_URL}/auth/dev-login`;
   };
 
   return (
@@ -45,7 +40,7 @@ export default function LoginPage() {
           <CardHeader className="text-center pb-2">
             <CardTitle className="text-lg">Sign in to your account</CardTitle>
             <CardDescription>
-              Choose Google OAuth or 1-click test evaluation access
+              Sign in with your Google account to access your personal dashboard
             </CardDescription>
           </CardHeader>
 
@@ -74,38 +69,15 @@ export default function LoginPage() {
                   d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
                 />
               </svg>
-              <span>Sign in with Google</span>
+              <span>Continue with Google</span>
             </button>
-
-            {/* Divider */}
-            <div className="relative my-4">
-              <div className="absolute inset-0 flex items-center">
-                <div className="w-full border-t border-neutral-200 dark:border-neutral-800" />
-              </div>
-              <div className="relative flex justify-center text-xs uppercase">
-                <span className="bg-white dark:bg-neutral-900 px-3 text-neutral-400 font-semibold tracking-wider">
-                  Or Recruiter 1-Click Access
-                </span>
-              </div>
-            </div>
-
-            {/* Instant Demo Login Button */}
-            <Button
-              variant="secondary"
-              size="lg"
-              className="w-full text-xs font-semibold py-3"
-              onClick={handleDevLogin}
-              rightIcon={<ArrowRight className="w-4 h-4" />}
-            >
-              Sign in as Demo Candidate (1-Click)
-            </Button>
           </CardContent>
 
           <CardFooter className="flex flex-col gap-4 pt-4 border-t border-neutral-100 dark:border-neutral-800/80">
             {/* Architecture Highlights */}
             <div className="w-full space-y-2">
               <div className="text-[11px] font-bold text-neutral-400 uppercase tracking-wider text-center">
-                Active Architecture Safeguards
+                Multi-User Architecture &amp; Data Isolation
               </div>
               <div className="grid grid-cols-3 gap-2 text-[11px] text-neutral-600 dark:text-neutral-400 text-center font-medium">
                 <div className="p-2 rounded-lg bg-neutral-50 dark:bg-neutral-800/50 flex flex-col items-center gap-1">
@@ -114,11 +86,11 @@ export default function LoginPage() {
                 </div>
                 <div className="p-2 rounded-lg bg-neutral-50 dark:bg-neutral-800/50 flex flex-col items-center gap-1">
                   <Database className="w-3.5 h-3.5 text-primary-500" />
-                  <span>Redis AOF</span>
+                  <span>Isolated DB</span>
                 </div>
                 <div className="p-2 rounded-lg bg-neutral-50 dark:bg-neutral-800/50 flex flex-col items-center gap-1">
                   <ShieldCheck className="w-3.5 h-3.5 text-success-500" />
-                  <span>Rate Limit</span>
+                  <span>Per-User Cap</span>
                 </div>
               </div>
             </div>

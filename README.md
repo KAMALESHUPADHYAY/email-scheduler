@@ -1,6 +1,6 @@
-# ReachInbox Email Scheduler & Queue Engine
+# MailPilot Email Scheduler & Queue Engine
 
-Production-grade, distributed "Email Scheduler" web application and background queue engine designed for high-throughput, fault-tolerant email dispatching with atomic rate limiting, restart safety, and full-text search.
+Production-grade, distributed "Email Scheduler" web application and background queue engine designed for high-throughput, fault-tolerant email dispatching with atomic rate limiting, restart safety, multi-user data isolation, and full-text search.
 
 ---
 
@@ -328,7 +328,7 @@ npx ts-node -r tsconfig-paths/register scripts/verify-all-smoke.ts
 
 ## ⏱️ 2-Minute Interview Demo Walkthrough
 
-1. **Sign In**: Navigate to the Web App. Click **"Sign in as Demo Candidate"** for instant 1-click evaluation, or click **"Sign in with Google"**.
+1. **Sign In**: Navigate to the Web App and click **"Sign in with Google"**. Select your Google account.
 2. **Review Sender Configuration**: The dashboard header automatically displays the active Ethereal SMTP account provisioned for your user.
 3. **Inspect Bull Board**: Click the **"Bull Board"** button in the header (Login: `admin` / `admin`). Notice the real-time queues.
 4. **Schedule a Campaign**:

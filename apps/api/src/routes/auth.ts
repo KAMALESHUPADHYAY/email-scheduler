@@ -6,7 +6,7 @@ import {
   config,
   prisma,
   logger,
-  createEtherealAccount,
+  ensureUserSender,
 } from '@email-scheduler/core';
 import { requireAuth } from '../middleware/auth';
 
@@ -18,56 +18,19 @@ const oauth2Client = new OAuth2Client(
   config.GOOGLE_REDIRECT_URI
 );
 
-// Helper to ensure user has an Ethereal sender
-export async function ensureUserSender(userId: string, userEmail: string) {
-  let sender = await prisma.sender.findFirst({
-    where: { user_id: userId },
-  });
-
-  if (!sender) {
-    try {
-      const ethereal = await createEtherealAccount();
-      sender = await prisma.sender.create({
-        data: {
-          user_id: userId,
-          email: userEmail,
-          ethereal_user: ethereal.user,
-          ethereal_pass: ethereal.pass,
-          smtp_host: ethereal.smtp.host,
-          smtp_port: ethereal.smtp.port,
-          hourly_limit: config.MAX_EMAILS_PER_HOUR_PER_SENDER,
-        },
-      });
-      logger.info({ userId, senderEmail: userEmail }, 'Created Ethereal sender for user');
-    } catch (err) {
-      logger.error({ err }, 'Failed to create Ethereal account, falling back to mock sender');
-      sender = await prisma.sender.create({
-        data: {
-          user_id: userId,
-          email: userEmail,
-          ethereal_user: 'mock_ethereal_user',
-          ethereal_pass: 'mock_ethereal_pass',
-          smtp_host: 'smtp.ethereal.email',
-          smtp_port: 587,
-          hourly_limit: config.MAX_EMAILS_PER_HOUR_PER_SENDER,
-        },
-      });
-    }
-  }
-
-  return sender;
-}
-
-// 1. Initiate Google OAuth
+// 1. Initiate Google OAuth with account chooser (prompt=select_account)
 authRouter.get('/google', (req: Request, res: Response) => {
-  // If credentials are mock/missing and requested, support direct redirect or OAuth URL
-  if (config.GOOGLE_CLIENT_ID === 'mock_google_client_id') {
-    return res.redirect('/auth/dev-login');
+  if (!config.GOOGLE_CLIENT_ID || config.GOOGLE_CLIENT_ID === 'mock_google_client_id') {
+    logger.error('Google OAuth requested but GOOGLE_CLIENT_ID is not configured');
+    return res.status(500).json({
+      success: false,
+      error: 'Google OAuth credentials are not configured on the server. Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET.',
+    });
   }
 
   const authUrl = oauth2Client.generateAuthUrl({
     access_type: 'offline',
-    prompt: 'consent',
+    prompt: 'select_account', // Forces Google to show the account chooser for multi-user switching
     scope: ['openid', 'email', 'profile'],
   });
 
@@ -78,7 +41,8 @@ authRouter.get('/google', (req: Request, res: Response) => {
 authRouter.get('/google/callback', async (req: Request, res: Response) => {
   const code = req.query.code as string;
   if (!code) {
-    return res.status(400).send('Missing authorization code');
+    logger.warn('Google OAuth callback called without authorization code');
+    return res.redirect(`${config.FRONTEND_URL}/login?error=missing_code`);
   }
 
   try {
@@ -97,23 +61,26 @@ authRouter.get('/google/callback', async (req: Request, res: Response) => {
       throw new Error('Invalid token payload from Google');
     }
 
+    // Refresh name, avatar, and google_id on EVERY login
     const user = await prisma.user.upsert({
       where: { email: payload.email },
       update: {
         google_id: payload.sub,
         name: payload.name || payload.email.split('@')[0],
-        avatar_url: payload.picture,
+        avatar_url: payload.picture || null,
       },
       create: {
         google_id: payload.sub,
         name: payload.name || payload.email.split('@')[0],
         email: payload.email,
-        avatar_url: payload.picture,
+        avatar_url: payload.picture || null,
       },
     });
 
-    const sender = await ensureUserSender(user.id, user.email);
+    // Ensure sender is created automatically on login
+    await ensureUserSender(user.id, user.email);
 
+    // Issue JWT session token
     const sessionToken = jwt.sign(
       { userId: user.id, email: user.email },
       config.SESSION_SECRET,
@@ -125,71 +92,22 @@ authRouter.get('/google/callback', async (req: Request, res: Response) => {
       secure: config.COOKIE_SECURE,
       sameSite: config.COOKIE_SAME_SITE as any,
       domain: config.COOKIE_DOMAIN || undefined,
+      path: '/',
       maxAge: 7 * 24 * 60 * 60 * 1000,
     });
 
+    logger.info({ userId: user.id, email: user.email }, 'User logged in via Google OAuth successfully');
     return res.redirect(`${config.FRONTEND_URL}/dashboard`);
-  } catch (error) {
-    logger.error({ error }, 'Google OAuth callback failure');
+  } catch (error: any) {
+    logger.error({ error: error.message }, 'Google OAuth callback failure');
     return res.redirect(`${config.FRONTEND_URL}/login?error=oauth_failed`);
   }
 });
 
-// Dev / Demo Login Route (for instant evaluation without setting up GCP credentials)
-authRouter.get('/dev-login', async (req: Request, res: Response) => {
-  const email = (req.query.email as string) || 'demo.user@reachinbox.test';
-  const name = (req.query.name as string) || 'Demo Candidate';
-
-  const user = await prisma.user.upsert({
-    where: { email },
-    update: {
-      name,
-      avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
-    },
-    create: {
-      google_id: `mock_google_${Date.now()}`,
-      email,
-      name,
-      avatar_url: 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=100&auto=format&fit=crop&q=80',
-    },
-  });
-
-  const sender = await ensureUserSender(user.id, user.email);
-
-  const sessionToken = jwt.sign(
-    { userId: user.id, email: user.email },
-    config.SESSION_SECRET,
-    { expiresIn: '7d' }
-  );
-
-  res.cookie('session_token', sessionToken, {
-    httpOnly: true,
-    secure: config.COOKIE_SECURE,
-    sameSite: config.COOKIE_SAME_SITE as any,
-    domain: config.COOKIE_DOMAIN || undefined,
-    maxAge: 7 * 24 * 60 * 60 * 1000,
-  });
-
-  if (req.query.json === 'true' || req.headers.accept?.includes('application/json')) {
-    return res.json({
-      success: true,
-      token: sessionToken,
-      user: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-        avatar_url: user.avatar_url,
-      },
-      sender,
-    });
-  }
-
-  return res.redirect(`${config.FRONTEND_URL}/dashboard`);
-});
-
-// 3. Current User Endpoint
+// 3. Current Authenticated User & Sender profile
 authRouter.get('/me', requireAuth, async (req: Request, res: Response) => {
   const user = req.user!;
+
   const sender = await prisma.sender.findFirst({
     where: { user_id: user.id },
   });
@@ -200,6 +118,7 @@ authRouter.get('/me', requireAuth, async (req: Request, res: Response) => {
       id: user.id,
       name: user.name,
       email: user.email,
+      avatarUrl: user.avatar_url,
       avatar_url: user.avatar_url,
       has_slack: !!user.slack_token,
       slack_channel: user.slack_channel,
@@ -209,27 +128,34 @@ authRouter.get('/me', requireAuth, async (req: Request, res: Response) => {
       ? {
           id: sender.id,
           email: sender.email,
-          ethereal_user: sender.ethereal_user,
           hourly_limit: sender.hourly_limit,
         }
       : null,
   });
 });
 
-// 4. Logout Endpoint
-authRouter.post('/logout', (req: Request, res: Response) => {
+// 4. Logout Endpoint (clears cookie with exact path '/')
+const handleLogout = (req: Request, res: Response) => {
   res.clearCookie('session_token', {
     httpOnly: true,
     secure: config.COOKIE_SECURE,
     sameSite: config.COOKIE_SAME_SITE as any,
     domain: config.COOKIE_DOMAIN || undefined,
+    path: '/',
   });
+
+  if (req.method === 'GET') {
+    return res.redirect(`${config.FRONTEND_URL}/login`);
+  }
 
   return res.json({
     success: true,
     message: 'Logged out successfully',
   });
-});
+};
+
+authRouter.post('/logout', handleLogout);
+authRouter.get('/logout', handleLogout);
 
 // 5. Slack OAuth Initiation
 authRouter.get('/slack', requireAuth, (req: Request, res: Response) => {

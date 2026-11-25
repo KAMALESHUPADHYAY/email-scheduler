@@ -3,9 +3,21 @@ export interface User {
   name: string;
   email: string;
   avatar_url?: string | null;
+  avatarUrl?: string | null;
   has_slack: boolean;
   slack_channel?: string | null;
   created_at: string;
+}
+
+export interface UserStats {
+  scheduledCount: number;
+  sentCount: number;
+  failedCount: number;
+  nextSendTime: string | null;
+  usedThisHour: number;
+  hourlyLimit: number;
+  senderEmail: string | null;
+  chartPoints: { timestamp: string; count: number }[];
 }
 
 export interface Sender {

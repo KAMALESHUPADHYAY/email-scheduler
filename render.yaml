@@ -1,7 +1,7 @@
 services:
   # 1. Express API Web Service
   - type: web
-    name: reachinbox-api
+    name: mailpilot-api
     runtime: node
     plan: free
     region: oregon
@@ -41,7 +41,7 @@ services:
 
   # 2. BullMQ Dedicated Background Worker Service
   - type: worker
-    name: reachinbox-worker
+    name: mailpilot-worker
     runtime: node
     plan: free
     region: oregon

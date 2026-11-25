@@ -1,7 +1,7 @@
 import { Client } from '@elastic/elasticsearch';
 import { config } from './config';
 import { logger } from './logger';
-import { EmailSearchResult } from './types';
+import { EmailSearchResult, EmailSearchResponse } from './types';
 
 let esClient: Client | null = null;
 let isEsAvailable = false;
@@ -36,6 +36,7 @@ export async function initElasticsearchIndex(): Promise<boolean> {
         mappings: {
           properties: {
             id: { type: 'keyword' },
+            user_id: { type: 'keyword' },
             campaign_id: { type: 'keyword' },
             sender_id: { type: 'keyword' },
             recipient: {
@@ -64,20 +65,23 @@ export async function initElasticsearchIndex(): Promise<boolean> {
   }
 }
 
-export async function indexEmailDocument(email: {
-  id: string;
-  campaign_id: string;
-  sender_id: string;
-  recipient: string;
-  subject: string;
-  body: string;
-  scheduled_at: Date | string;
-  sent_at?: Date | string | null;
-  status: string;
-  preview_url?: string | null;
-  error?: string | null;
-  created_at: Date | string;
-}): Promise<void> {
+export async function indexEmailDocument(
+  email: {
+    id: string;
+    campaign_id: string;
+    sender_id: string;
+    recipient: string;
+    subject: string;
+    body: string;
+    scheduled_at: Date | string;
+    sent_at?: Date | string | null;
+    status: string;
+    preview_url?: string | null;
+    error?: string | null;
+    created_at: Date | string;
+  },
+  userId?: string
+): Promise<void> {
   try {
     const client = getElasticsearchClient();
     await client.index({
@@ -85,6 +89,7 @@ export async function indexEmailDocument(email: {
       id: email.id,
       document: {
         id: email.id,
+        user_id: userId || null,
         campaign_id: email.campaign_id,
         sender_id: email.sender_id,
         recipient: email.recipient,
@@ -99,62 +104,72 @@ export async function indexEmailDocument(email: {
       },
       refresh: 'wait_for',
     });
-    logger.debug({ emailId: email.id }, 'Indexed email in Elasticsearch');
+    logger.debug({ emailId: email.id, userId }, 'Indexed email document in Elasticsearch');
   } catch (error) {
-    logger.warn({ error, emailId: email.id }, 'Failed to index email in Elasticsearch (soft fail)');
+    logger.warn({ error, emailId: email.id }, 'Soft failure indexing email document in Elasticsearch');
   }
 }
 
 export async function searchEmailsInES(params: {
-  query?: string;
+  query: string;
+  userId: string;
   status?: string;
   limit?: number;
   offset?: number;
-}): Promise<{ total: number; emails: EmailSearchResult[] } | null> {
+}): Promise<EmailSearchResponse | null> {
   try {
     const client = getElasticsearchClient();
-    const must: any[] = [];
-    const filter: any[] = [];
+    const { query, userId, status, limit = 20, offset = 0 } = params;
 
-    if (params.query && params.query.trim()) {
-      must.push({
+    const mustClauses: any[] = [];
+    const filterClauses: any[] = [
+      { term: { user_id: userId } }, // Strict per-user isolation in ES
+    ];
+
+    if (query && query.trim()) {
+      mustClauses.push({
         multi_match: {
-          query: params.query.trim(),
+          query: query.trim(),
           fields: ['recipient^3', 'subject^2', 'body'],
           fuzziness: 'AUTO',
         },
       });
     } else {
-      must.push({ match_all: {} });
+      mustClauses.push({ match_all: {} });
     }
 
-    if (params.status && params.status !== 'all') {
-      filter.push({ term: { status: params.status } });
+    if (status && status !== 'all') {
+      filterClauses.push({
+        term: { status },
+      });
     }
 
     const response = await client.search({
       index: config.ELASTICSEARCH_INDEX,
-      from: params.offset || 0,
-      size: params.limit || 20,
-      sort: [{ scheduled_at: { order: 'desc' } }],
+      from: offset,
+      size: limit,
       query: {
         bool: {
-          must,
-          filter,
+          must: mustClauses,
+          filter: filterClauses,
         },
       },
+      sort: [{ scheduled_at: { order: 'desc' } }],
     });
 
-    const hits = response.hits.hits;
-    const total =
+    const totalHits =
       typeof response.hits.total === 'number'
         ? response.hits.total
-        : response.hits.total?.value || hits.length;
+        : response.hits.total?.value || 0;
 
-    const emails = hits.map((hit) => hit._source as EmailSearchResult);
-    return { total, emails };
+    const emails = response.hits.hits.map((hit: any) => hit._source);
+
+    return {
+      total: totalHits,
+      emails,
+    };
   } catch (error) {
-    logger.warn({ error }, 'Elasticsearch search error');
+    logger.warn({ error }, 'Elasticsearch search failure; returning null for DB fallback');
     return null;
   }
 }

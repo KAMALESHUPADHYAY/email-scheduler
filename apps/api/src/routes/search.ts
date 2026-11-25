@@ -19,18 +19,19 @@ searchRouter.get('/', requireAuth, async (req: Request, res: Response) => {
   });
   const senderIds = new Set(senders.map((s) => s.id));
 
-  // 1. Try Elasticsearch first
+  // 1. Try Elasticsearch first (with strict user_id isolation)
   try {
     const esResult = await searchEmailsInES({
       query: q,
+      userId: user.id,
       status: status !== 'all' ? status : undefined,
       limit,
       offset,
     });
 
     if (esResult) {
-      // Filter hits to senderIds belonging to current user
-      const userHits = esResult.emails.filter((item) => senderIds.has(item.sender_id));
+      // Hits are already filtered by user_id in ES, double-check senderIds
+      const userHits = esResult.emails.filter((item: any) => senderIds.has(item.sender_id));
       return res.json({
         success: true,
         source: 'elasticsearch',

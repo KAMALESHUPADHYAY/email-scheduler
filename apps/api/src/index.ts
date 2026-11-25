@@ -16,6 +16,7 @@ import { emailsRouter } from './routes/emails';
 import { searchRouter } from './routes/search';
 import { queuesRouter } from './routes/queues';
 import { debugRouter } from './routes/debug';
+import { statsRouter } from './routes/stats';
 import { errorHandler } from './middleware/errorHandler';
 
 const app = express();
@@ -115,6 +116,7 @@ app.get('/me', (req, res, next) => {
 app.use('/campaigns', campaignsRouter);
 app.use('/emails', emailsRouter);
 app.use('/search', searchRouter);
+app.use('/stats', statsRouter);
 app.use('/admin/queues', queuesRouter);
 app.use('/debug', debugRouter);
 

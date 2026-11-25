@@ -32,7 +32,7 @@ async function runProductionSmokeTests() {
   try {
     const loginRes = await axios.get(`${API_BASE}/auth/dev-login`, {
       params: {
-        email: 'interviewer.smoke@reachinbox.test',
+        email: 'interviewer.smoke@mailpilot.test',
         name: 'Placement Interviewer',
         json: 'true',
       },

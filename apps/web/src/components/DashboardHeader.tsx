@@ -35,9 +35,9 @@ export const DashboardHeader: React.FC<DashboardHeaderProps> = ({
             <div>
               <div className="flex items-center space-x-2">
                 <h1 className="text-base font-bold text-surface-900 dark:text-surface-100">
-                  ReachInbox Scheduler
+                  MailPilot
                 </h1>
-                <span className="text-[10px] font-semibold bg-brand-50 dark:bg-brand-950/60 text-brand-600 dark:text-brand-400 border border-brand-200 dark:border-brand-800 px-2 py-0.5 rounded-full">
+                <span className="text-[10px] font-semibold bg-primary-50 dark:bg-primary-950/60 text-primary-600 dark:text-primary-400 border border-primary-200 dark:border-primary-800 px-2 py-0.5 rounded-full">
                   Production Queue
                 </span>
               </div>

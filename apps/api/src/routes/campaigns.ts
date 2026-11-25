@@ -6,9 +6,9 @@ import {
   logger,
   scheduleEmailJob,
   indexEmailDocument,
+  ensureUserSender,
 } from '@email-scheduler/core';
 import { requireAuth } from '../middleware/auth';
-import { ensureUserSender } from './auth';
 
 export const campaignsRouter = Router();
 
@@ -53,6 +53,12 @@ campaignsRouter.post(
     });
     if (!sender) {
       sender = await ensureUserSender(user.id, user.email);
+    }
+    if (!sender) {
+      return res.status(500).json({
+        success: false,
+        error: 'Failed to provision an SMTP sender account for this user.',
+      });
     }
 
     // 2. Parse incoming fields
@@ -218,8 +224,8 @@ campaignsRouter.post(
           email.scheduled_at
         );
 
-        // Soft-index in Elasticsearch
-        indexEmailDocument(email).catch((err) =>
+        // Soft-index in Elasticsearch with user_id for strict per-user search isolation
+        indexEmailDocument(email, user.id).catch((err) =>
           logger.warn({ err, emailId: email.id }, 'Async ES indexing error on create')
         );
       } catch (err) {

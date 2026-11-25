@@ -53,3 +53,8 @@ export interface EmailSearchResult {
   error?: string | null;
   created_at: string;
 }
+
+export interface EmailSearchResponse {
+  total: number;
+  emails: EmailSearchResult[];
+}

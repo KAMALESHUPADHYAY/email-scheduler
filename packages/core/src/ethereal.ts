@@ -56,15 +56,15 @@ export async function ensureUserSender(userId: string, userEmail: string) {
     where: { user_id: userId },
   });
 
-  // If sender has mock or missing credentials, attempt to create real Ethereal credentials
-  if (!sender || sender.ethereal_user === 'mock_ethereal_user') {
+  // If sender does not exist or has an old mock user, generate real Ethereal credentials
+  if (!sender || sender.ethereal_user.includes('mock')) {
     try {
       const ethereal = await createEtherealAccount();
       if (!sender) {
         sender = await prisma.sender.create({
           data: {
             user_id: userId,
-            email: userEmail,
+            email: ethereal.user, // Use real Ethereal email address for the user's sender
             ethereal_user: ethereal.user,
             ethereal_pass: ethereal.pass,
             smtp_host: ethereal.smtp.host,
@@ -72,34 +72,23 @@ export async function ensureUserSender(userId: string, userEmail: string) {
             hourly_limit: config.MAX_EMAILS_PER_HOUR_PER_SENDER,
           },
         });
-        logger.info({ userId, senderEmail: userEmail, etherealUser: ethereal.user }, 'Created Ethereal sender for user');
+        logger.info({ userId, senderEmail: ethereal.user }, 'Created new Ethereal sender for user');
       } else {
         sender = await prisma.sender.update({
           where: { id: sender.id },
           data: {
+            email: ethereal.user,
             ethereal_user: ethereal.user,
             ethereal_pass: ethereal.pass,
             smtp_host: ethereal.smtp.host,
             smtp_port: ethereal.smtp.port,
           },
         });
-        logger.info({ userId, senderEmail: userEmail, etherealUser: ethereal.user }, 'Upgraded sender with real Ethereal credentials');
+        logger.info({ userId, senderEmail: ethereal.user }, 'Upgraded sender with real Ethereal credentials');
       }
     } catch (err: any) {
-      logger.error({ err: err.message, userId }, 'Failed to create Ethereal account, falling back to mock sender');
-      if (!sender) {
-        sender = await prisma.sender.create({
-          data: {
-            user_id: userId,
-            email: userEmail,
-            ethereal_user: 'mock_ethereal_user',
-            ethereal_pass: 'mock_ethereal_pass',
-            smtp_host: 'smtp.ethereal.email',
-            smtp_port: 587,
-            hourly_limit: config.MAX_EMAILS_PER_HOUR_PER_SENDER,
-          },
-        });
-      }
+      logger.error({ err: err.message, userId, userEmail }, 'Failed to create Ethereal test account');
+      throw new Error(`Failed to initialize Ethereal sender: ${err.message}`);
     }
   }
 

@@ -438,7 +438,7 @@ export default function LandingPage() {
             Experience Placement-Grade Cold Email Resiliency
           </h2>
           <p className="mt-3 text-base text-neutral-600 dark:text-neutral-400">
-            Sign in with Google OAuth or test instantly using the 1-click candidate demo session.
+            Sign in with your Google account to access your personal cold email dispatch dashboard.
           </p>
           <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
             <Link href="/login" className="w-full sm:w-auto">

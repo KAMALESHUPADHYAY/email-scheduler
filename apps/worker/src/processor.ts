@@ -269,8 +269,8 @@ export async function processEmailJob(job: Job<EmailJobData>): Promise<any> {
       `[STATUS_UPDATE] Email ${emailId} marked status='sent' in DB`
     );
 
-    // 8. Update Elasticsearch
-    await indexEmailDocument(updatedEmail).catch((err) =>
+    // 8. Update Elasticsearch (with sender user_id)
+    await indexEmailDocument(updatedEmail, sender.user_id).catch((err) =>
       logger.warn({ err, emailId }, 'Async ES indexing error on send')
     );
 
@@ -309,8 +309,8 @@ export async function processEmailJob(job: Job<EmailJobData>): Promise<any> {
       `[STATUS_UPDATE] Email ${emailId} marked status='failed' in DB`
     );
 
-    // Update Elasticsearch
-    await indexEmailDocument(failedEmail).catch((esErr) =>
+    // Update Elasticsearch (with sender user_id)
+    await indexEmailDocument(failedEmail, sender.user_id).catch((esErr) =>
       logger.warn({ esErr, emailId }, 'Async ES indexing error on failure')
     );
 
