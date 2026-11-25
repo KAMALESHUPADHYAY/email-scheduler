@@ -2,6 +2,9 @@ import { Router, Request, Response } from 'express';
 import { OAuth2Client } from 'google-auth-library';
 import axios from 'axios';
 import jwt from 'jsonwebtoken';
+import crypto from 'crypto';
+import { z } from 'zod';
+import rateLimit from 'express-rate-limit';
 import {
   config,
   prisma,
@@ -11,6 +14,192 @@ import {
 import { requireAuth } from '../middleware/auth';
 
 export const authRouter = Router();
+
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: {
+    success: false,
+    error: 'Too many authentication attempts. Please wait 15 minutes before trying again.',
+  },
+});
+
+function hashPassword(password: string): string {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+  return `${salt}:${hash}`;
+}
+
+function verifyPassword(password: string, stored: string): boolean {
+  try {
+    const [salt, key] = stored.split(':');
+    if (!salt || !key) return false;
+    const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+    return crypto.timingSafeEqual(Buffer.from(key, 'hex'), Buffer.from(hash, 'hex'));
+  } catch {
+    return false;
+  }
+}
+
+const registerSchema = z.object({
+  email: z.string().trim().email('Please enter a valid email address'),
+  password: z.string().min(6, 'Password must be at least 6 characters'),
+  name: z.string().trim().min(2, 'Name must be at least 2 characters'),
+});
+
+const loginSchema = z.object({
+  email: z.string().trim().email('Please enter a valid email address'),
+  password: z.string().min(1, 'Password is required'),
+});
+
+// Email + Password Registration
+authRouter.post('/register', authLimiter, async (req: Request, res: Response) => {
+  const parseResult = registerSchema.safeParse(req.body);
+  if (!parseResult.success) {
+    return res.status(400).json({
+      success: false,
+      error: parseResult.error.errors[0]?.message || 'Invalid input data',
+    });
+  }
+
+  const { email, password, name } = parseResult.data;
+
+  try {
+    const existing = await prisma.user.findUnique({
+      where: { email: email.toLowerCase() },
+    });
+
+    if (existing) {
+      return res.status(400).json({
+        success: false,
+        error: 'An account with this email already exists. Please log in.',
+      });
+    }
+
+    const passwordHash = hashPassword(password);
+    const user = await prisma.user.create({
+      data: {
+        email: email.toLowerCase(),
+        name,
+        password_hash: passwordHash,
+      } as any,
+    });
+
+    // Auto-provision Ethereal sender
+    await ensureUserSender(user.id, user.email);
+
+    const sessionToken = jwt.sign(
+      {
+        userId: user.id,
+        email: user.email,
+        name: user.name,
+        avatarUrl: user.avatar_url,
+      },
+      config.SESSION_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.cookie('session_token', sessionToken, {
+      httpOnly: true,
+      secure: config.COOKIE_SECURE,
+      sameSite: config.COOKIE_SAME_SITE as any,
+      domain: config.COOKIE_DOMAIN || undefined,
+      path: '/',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    return res.json({
+      success: true,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        avatarUrl: user.avatar_url,
+      },
+    });
+  } catch (error: any) {
+    logger.error({ error: error.message }, 'Failed to register email/password user');
+    return res.status(500).json({
+      success: false,
+      error: 'Registration failed. Please try again.',
+    });
+  }
+});
+
+// Email + Password Login
+authRouter.post('/login', authLimiter, async (req: Request, res: Response) => {
+  const parseResult = loginSchema.safeParse(req.body);
+  if (!parseResult.success) {
+    return res.status(400).json({
+      success: false,
+      error: parseResult.error.errors[0]?.message || 'Invalid input data',
+    });
+  }
+
+  const { email, password } = parseResult.data;
+
+  try {
+    const user = await prisma.user.findUnique({
+      where: { email: email.toLowerCase() },
+    });
+
+    if (!user || !(user as any).password_hash) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid email or password.',
+      });
+    }
+
+    const isValid = verifyPassword(password, (user as any).password_hash);
+    if (!isValid) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid email or password.',
+      });
+    }
+
+    // Ensure sender exists
+    await ensureUserSender(user.id, user.email);
+
+    const sessionToken = jwt.sign(
+      {
+        userId: user.id,
+        email: user.email,
+        name: user.name,
+        avatarUrl: user.avatar_url,
+      },
+      config.SESSION_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    res.cookie('session_token', sessionToken, {
+      httpOnly: true,
+      secure: config.COOKIE_SECURE,
+      sameSite: config.COOKIE_SAME_SITE as any,
+      domain: config.COOKIE_DOMAIN || undefined,
+      path: '/',
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+    });
+
+    return res.json({
+      success: true,
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        avatarUrl: user.avatar_url,
+      },
+    });
+  } catch (error: any) {
+    logger.error({ error: error.message }, 'Failed to log in email/password user');
+    return res.status(500).json({
+      success: false,
+      error: 'Login failed. Please try again.',
+    });
+  }
+});
 
 const oauth2Client = new OAuth2Client(
   config.GOOGLE_CLIENT_ID,

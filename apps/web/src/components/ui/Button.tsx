@@ -4,8 +4,8 @@ import { clsx } from 'clsx';
 import { twMerge } from 'tailwind-merge';
 
 export interface ButtonProps extends React.ButtonHTMLAttributes<HTMLButtonElement> {
-  variant?: 'primary' | 'secondary' | 'outline' | 'danger' | 'ghost';
-  size?: 'sm' | 'md' | 'lg';
+  variant?: 'solid' | 'primary' | 'outline' | 'ghost' | 'pill' | 'google' | 'danger';
+  size?: 'xs' | 'sm' | 'md' | 'lg';
   isLoading?: boolean;
   leftIcon?: React.ReactNode;
   rightIcon?: React.ReactNode;
@@ -16,7 +16,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     {
       children,
       className,
-      variant = 'primary',
+      variant = 'solid',
       size = 'md',
       isLoading = false,
       disabled,
@@ -28,25 +28,23 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     ref
   ) => {
     const baseStyles =
-      'inline-flex items-center justify-center font-medium transition-all focus:outline-none focus:ring-2 focus:ring-offset-2 disabled:opacity-50 disabled:pointer-events-none rounded-lg active:scale-[0.98] select-none';
+      'inline-flex items-center justify-center font-medium transition-colors select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-primary-700 focus-visible:ring-offset-1 disabled:opacity-50 disabled:pointer-events-none';
 
     const variants = {
-      primary:
-        'bg-primary-600 text-white hover:bg-primary-700 focus:ring-primary-500 shadow-sm shadow-primary-500/20 dark:focus:ring-offset-neutral-900',
-      secondary:
-        'bg-neutral-800 text-white hover:bg-neutral-700 dark:bg-neutral-800 dark:text-neutral-100 dark:hover:bg-neutral-700 focus:ring-neutral-500 shadow-sm dark:focus:ring-offset-neutral-900',
-      outline:
-        'border border-neutral-300 dark:border-neutral-700 bg-transparent hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-800 dark:text-neutral-200 focus:ring-primary-500 dark:focus:ring-offset-neutral-900',
-      danger:
-        'bg-danger-600 text-white hover:bg-danger-700 focus:ring-danger-500 shadow-sm shadow-danger-500/20 dark:focus:ring-offset-neutral-900',
-      ghost:
-        'bg-transparent hover:bg-neutral-100 dark:hover:bg-neutral-800 text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-neutral-100 focus:ring-primary-500 dark:focus:ring-offset-neutral-900',
+      solid: 'bg-primary-700 text-white hover:bg-primary-hover shadow-subtle rounded-input',
+      primary: 'bg-primary-700 text-white hover:bg-primary-hover shadow-subtle rounded-input',
+      outline: 'border border-primary-700 bg-transparent text-primary-700 hover:bg-primary-light rounded-input',
+      ghost: 'bg-transparent hover:bg-neutral-100 text-neutral-600 hover:text-neutral-900 rounded-input',
+      pill: 'rounded-pill border border-primary-700 text-primary-700 hover:bg-primary-light bg-transparent font-medium',
+      google: 'bg-primary-light border border-primary-200/80 text-primary-900 hover:bg-primary-100/90 rounded-input font-medium shadow-subtle',
+      danger: 'bg-failed-bg text-failed-text border border-failed-border hover:bg-red-100 rounded-input font-medium',
     };
 
     const sizes = {
-      sm: 'text-xs px-3 py-1.5 gap-1.5 font-medium',
-      md: 'text-sm px-4 py-2 gap-2 font-medium',
-      lg: 'text-base px-6 py-2.5 gap-2.5 font-semibold',
+      xs: 'text-xs px-2.5 py-1 gap-1',
+      sm: 'text-xs px-3 py-1.5 gap-1.5',
+      md: 'text-sm px-4 py-2 gap-2',
+      lg: 'text-base px-5 py-2.5 gap-2.5',
     };
 
     return (
@@ -58,12 +56,12 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
         {...props}
       >
         {isLoading ? (
-          <Loader2 className="w-4 h-4 animate-spin text-current" />
+          <Loader2 className="w-4 h-4 animate-spin shrink-0 text-current" />
         ) : (
-          leftIcon && <span className="inline-flex shrink-0">{leftIcon}</span>
+          leftIcon && <span className="shrink-0">{leftIcon}</span>
         )}
         <span>{children}</span>
-        {!isLoading && rightIcon && <span className="inline-flex shrink-0">{rightIcon}</span>}
+        {!isLoading && rightIcon && <span className="shrink-0">{rightIcon}</span>}
       </button>
     );
   }

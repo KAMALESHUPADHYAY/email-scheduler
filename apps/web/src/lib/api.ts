@@ -69,6 +69,24 @@ class ApiClient {
     return this.request('/auth/me');
   }
 
+  async loginWithPassword(email: string, password: string): Promise<{ success: boolean; user: User }> {
+    return this.request('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({ email, password }),
+    });
+  }
+
+  async registerWithPassword(
+    email: string,
+    password: string,
+    name: string
+  ): Promise<{ success: boolean; user: User }> {
+    return this.request('/auth/register', {
+      method: 'POST',
+      body: JSON.stringify({ email, password, name }),
+    });
+  }
+
   async logout(): Promise<{ success: boolean; message: string }> {
     return this.request('/auth/logout', { method: 'POST' });
   }
@@ -81,6 +99,16 @@ class ApiClient {
   // Per-user Stats
   async getStats(): Promise<{ success: boolean; data: UserStats }> {
     return this.request('/stats');
+  }
+
+  // Single email fetch
+  async getEmail(id: string): Promise<{ success: boolean; data: EmailItem }> {
+    return this.request(`/emails/${id}`);
+  }
+
+  // Star toggle
+  async starEmail(id: string): Promise<{ success: boolean; data: EmailItem }> {
+    return this.request(`/emails/${id}/star`, { method: 'PATCH' });
   }
 
   // Emails list

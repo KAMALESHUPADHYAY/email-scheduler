@@ -39,12 +39,19 @@ export interface EmailItem {
   scheduled_at: string;
   sent_at?: string | null;
   status: EmailStatus;
+  is_starred?: boolean;
   preview_url?: string | null;
   error?: string | null;
   created_at: string;
+  sender?: {
+    id: string;
+    email: string;
+    user_id: string;
+  };
   campaign?: {
     id: string;
     subject: string;
+    created_at?: string;
   };
 }
 

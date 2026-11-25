@@ -16,7 +16,8 @@ enum EmailStatus {
 
 model User {
   id            String     @id @default(uuid())
-  google_id     String     @unique @map("google_id")
+  google_id     String?    @unique @map("google_id")
+  password_hash String?    @map("password_hash")
   name          String
   email         String     @unique
   avatar_url    String?    @map("avatar_url")
@@ -76,6 +77,7 @@ model Email {
   scheduled_at  DateTime    @map("scheduled_at")
   sent_at       DateTime?   @map("sent_at")
   status        EmailStatus @default(scheduled)
+  is_starred    Boolean     @default(false) @map("is_starred")
   preview_url   String?     @map("preview_url")
   error         String?     @db.Text
   created_at    DateTime    @default(now()) @map("created_at")

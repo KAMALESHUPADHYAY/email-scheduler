@@ -7,7 +7,7 @@ export const Table = React.forwardRef<HTMLTableElement, React.HTMLAttributes<HTM
     <div className="w-full overflow-x-auto">
       <table
         ref={ref}
-        className={twMerge(clsx('w-full caption-bottom text-sm text-left border-collapse', className))}
+        className={twMerge(clsx('w-full caption-bottom text-xs text-left border-collapse', className))}
         {...props}
       />
     </div>
@@ -19,9 +19,7 @@ export const TableHeader = React.forwardRef<HTMLTableSectionElement, React.HTMLA
   ({ className, ...props }, ref) => (
     <thead
       ref={ref}
-      className={twMerge(
-        clsx('bg-neutral-50 dark:bg-neutral-800/50 border-b border-neutral-200 dark:border-neutral-800', className)
-      )}
+      className={twMerge(clsx('bg-neutral-50/70 border-b border-neutral-200 text-neutral-500 font-medium', className))}
       {...props}
     />
   )
@@ -32,7 +30,7 @@ export const TableBody = React.forwardRef<HTMLTableSectionElement, React.HTMLAtt
   ({ className, ...props }, ref) => (
     <tbody
       ref={ref}
-      className={twMerge(clsx('divide-y divide-neutral-200 dark:divide-neutral-800/60', className))}
+      className={twMerge(clsx('divide-y divide-neutral-100', className))}
       {...props}
     />
   )
@@ -44,10 +42,7 @@ export const TableRow = React.forwardRef<HTMLTableRowElement, React.HTMLAttribut
     <tr
       ref={ref}
       className={twMerge(
-        clsx(
-          'transition-colors hover:bg-neutral-50/70 dark:hover:bg-neutral-800/40 cursor-default select-none',
-          className
-        )
+        clsx('transition-colors hover:bg-neutral-50/80 cursor-pointer border-b border-neutral-100', className)
       )}
       {...props}
     />
@@ -60,10 +55,7 @@ export const TableHead = React.forwardRef<HTMLTableCellElement, React.ThHTMLAttr
     <th
       ref={ref}
       className={twMerge(
-        clsx(
-          'h-10 px-4 text-xs font-semibold uppercase tracking-wider text-neutral-500 dark:text-neutral-400 text-left align-middle',
-          className
-        )
+        clsx('h-8 px-3 text-left align-middle font-medium text-neutral-500 text-xs tracking-tight', className)
       )}
       {...props}
     />
@@ -75,7 +67,7 @@ export const TableCell = React.forwardRef<HTMLTableCellElement, React.TdHTMLAttr
   ({ className, ...props }, ref) => (
     <td
       ref={ref}
-      className={twMerge(clsx('px-4 py-3.5 align-middle text-sm text-neutral-800 dark:text-neutral-200', className))}
+      className={twMerge(clsx('p-3 align-middle text-neutral-800 text-xs', className))}
       {...props}
     />
   )

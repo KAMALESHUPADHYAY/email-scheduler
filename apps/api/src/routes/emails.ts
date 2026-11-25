@@ -61,3 +61,75 @@ emailsRouter.get('/', requireAuth, async (req: Request, res: Response) => {
     },
   });
 });
+
+// GET /emails/:id - Fetch single email with detail
+emailsRouter.get('/:id', requireAuth, async (req: Request, res: Response) => {
+  const user = req.user!;
+  const emailId = req.params.id;
+
+  const email = await prisma.email.findUnique({
+    where: { id: emailId },
+    include: {
+      sender: {
+        select: {
+          id: true,
+          email: true,
+          user_id: true,
+        },
+      },
+      campaign: {
+        select: {
+          id: true,
+          subject: true,
+          created_at: true,
+        },
+      },
+    },
+  });
+
+  if (!email || email.sender.user_id !== user.id) {
+    return res.status(404).json({
+      success: false,
+      error: 'Email not found or access denied.',
+    });
+  }
+
+  return res.json({
+    success: true,
+    data: email,
+  });
+});
+
+// PATCH /emails/:id/star - Toggle starred status
+emailsRouter.patch('/:id/star', requireAuth, async (req: Request, res: Response) => {
+  const user = req.user!;
+  const emailId = req.params.id;
+
+  const email = await prisma.email.findUnique({
+    where: { id: emailId },
+    include: {
+      sender: {
+        select: { user_id: true },
+      },
+    },
+  });
+
+  if (!email || email.sender.user_id !== user.id) {
+    return res.status(404).json({
+      success: false,
+      error: 'Email not found or access denied.',
+    });
+  }
+
+  const updated = await prisma.email.update({
+    where: { id: emailId },
+    data: {
+      is_starred: !(email as any).is_starred,
+    } as any,
+  });
+
+  return res.json({
+    success: true,
+    data: updated,
+  });
+});
