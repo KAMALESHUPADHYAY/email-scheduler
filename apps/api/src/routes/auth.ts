@@ -112,6 +112,7 @@ authRouter.post('/register', authLimiter, async (req: Request, res: Response) =>
 
     return res.json({
       success: true,
+      sessionToken,
       user: {
         id: user.id,
         name: user.name,
@@ -185,6 +186,7 @@ authRouter.post('/login', authLimiter, async (req: Request, res: Response) => {
 
     return res.json({
       success: true,
+      sessionToken,
       user: {
         id: user.id,
         name: user.name,
